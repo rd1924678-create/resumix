@@ -1,0 +1,180 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+
+@layer base {
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body ::selection {
+    background-color: #dbeafe;
+  }
+}
+
+
+/* Custom PDF/Print Styles */
+@media print {
+  /* Hide interactive elements when printing */
+  .no-print,
+  nav,
+  header,
+  footer,
+  button,
+  .btn,
+  .action-buttons,
+  .sidebar,
+  .suggestions-panel {
+    display: none !important;
+  }
+
+  /* Force background colors to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset body and wrapper styles for printing */
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide wrapper container backgrounds and padding when printing */
+  .bg-slate-100,
+  .min-h-screen,
+  main,
+  .flex-grow,
+  .max-w-5xl,
+  .mt-8 {
+    background: transparent !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .resume-full-preview-wrapper {
+    background: transparent !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Page margins and layout */
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
+  .resume-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    min-height: auto !important;
+  }
+}
+
+/* Styling overrides for PDF generation */
+.resume-preview-card.generating-pdf {
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  width: 210mm !important;
+  background: white !important;
+  min-height: auto !important;
+}
+
+
+/* Page break optimization rules for PDF printing and html2pdf */
+.resume-container h2,
+.resume-container .flex,
+.resume-container li,
+.resume-container p,
+.resume-container blockquote,
+.resume-container tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+
+
+/* A4 Screen Preview Container */
+.resume-preview-card {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm;
+  margin: 0 auto;
+  background: white;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+/* Live preview mini (inside builder right panel) */
+.resume-live-preview-wrapper {
+  width: 100%;
+  overflow: hidden;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.resume-live-preview-wrapper .resume-preview-card {
+  transform-origin: top left;
+  margin: 0;
+}
+
+/* Full-width scrollable preview (ResumePreview page) */
+.resume-full-preview-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 24px;
+  min-height: 400px;
+}
+
+/* Ensure bullet points look standard and clean */
+.bullet-list {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+}
+
+/* Modern minimalist scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 0.25rem;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
