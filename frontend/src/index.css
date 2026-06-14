@@ -2,24 +2,27 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
-
-@layer base {
-  body {
-    background-color: #f8fafc;
-    color: #0f172a;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  body ::selection {
-    background-color: #dbeafe;
-  }
+:root {
+  --background: #030712;
+  --foreground: #f3f4f6;
 }
 
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body ::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: #bfdbfe;
+}
 
 /* Custom PDF/Print Styles */
 @media print {
-  /* Hide interactive elements when printing */
+
   .no-print,
   nav,
   header,
@@ -32,14 +35,13 @@
     display: none !important;
   }
 
-  /* Force background colors to print */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Reset body and wrapper styles for printing */
-  body, html {
+  body,
+  html {
     background: #ffffff !important;
     color: #000000 !important;
     font-size: 11pt !important;
@@ -49,7 +51,6 @@
     padding: 0 !important;
   }
 
-  /* Hide wrapper container backgrounds and padding when printing */
   .bg-slate-100,
   .min-h-screen,
   main,
@@ -78,7 +79,6 @@
     overflow: visible !important;
   }
 
-  /* Page margins and layout */
   @page {
     size: A4 portrait;
     margin: 15mm;
@@ -96,7 +96,6 @@
   }
 }
 
-/* Styling overrides for PDF generation */
 .resume-preview-card.generating-pdf {
   border: none !important;
   box-shadow: none !important;
@@ -106,8 +105,6 @@
   min-height: auto !important;
 }
 
-
-/* Page break optimization rules for PDF printing and html2pdf */
 .resume-container h2,
 .resume-container .flex,
 .resume-container li,
@@ -118,8 +115,6 @@
   break-inside: avoid !important;
 }
 
-
-
 /* A4 Screen Preview Container */
 .resume-preview-card {
   width: 210mm;
@@ -127,17 +122,17 @@
   padding: 18mm;
   margin: 0 auto;
   background: white;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  border: 1px solid #1e293b;
 }
 
 /* Live preview mini (inside builder right panel) */
 .resume-live-preview-wrapper {
   width: 100%;
   overflow: hidden;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  background: #0b0f19;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
 }
 
 .resume-live-preview-wrapper .resume-preview-card {
@@ -150,10 +145,11 @@
   width: 100%;
   overflow-x: auto;
   overflow-y: visible;
-  background: #f1f5f9;
-  border-radius: 12px;
+  background: #0b0f19;
+  border-radius: 16px;
   padding: 24px;
   min-height: 400px;
+  border: 1px solid #1e293b;
 }
 
 /* Ensure bullet points look standard and clean */
@@ -167,14 +163,242 @@
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
-  border-radius: 0.25rem;
-}
-::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
+  background-color: #334155;
+  border-radius: 9999px;
 }
 
+::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
+}
+
+/* Premium Animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes pulse-slow {
+
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes bounce-slow {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 8s ease-in-out infinite;
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 4.5s ease-in-out infinite;
+}
+
+.bg-grid-white {
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* ── Auth input — dark background, light text, autofill override ── */
+.auth-input {
+  background-color: #0c1120 !important;
+  color: #f1f5f9 !important;
+  caret-color: #f1f5f9;
+}
+
+.auth-input::placeholder {
+  color: #475569 !important;
+  opacity: 1;
+}
+
+/* Nuclear autofill override — prevents Chrome from flashing white */
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus,
+.auth-input:-webkit-autofill:active,
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 60px #0c1120 inset !important;
+  box-shadow: 0 0 0 60px #0c1120 inset !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  caret-color: #f1f5f9 !important;
+  background-color: #0c1120 !important;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Premium Dark Theme Overrides for Builder and Admin Panels */
+.resume-builder-dark-theme {
+  color: #f3f4f6;
+}
+
+.resume-builder-dark-theme h1,
+.resume-builder-dark-theme h2,
+.resume-builder-dark-theme h3,
+.resume-builder-dark-theme h4,
+.resume-builder-dark-theme th {
+  color: #ffffff !important;
+}
+
+.resume-builder-dark-theme select,
+.resume-builder-dark-theme input:not([type="checkbox"]):not([type="radio"]),
+.resume-builder-dark-theme textarea {
+  background-color: #090d16 !important;
+  border-color: #1e293b !important;
+  color: #ffffff !important;
+}
+
+.resume-builder-dark-theme input::placeholder,
+.resume-builder-dark-theme textarea::placeholder {
+  color: #475569 !important;
+}
+
+.resume-builder-dark-theme .bg-white {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+  border-color: #1e293b !important;
+}
+
+.resume-builder-dark-theme .bg-slate-50 {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  border-color: #1e293b !important;
+}
+
+.resume-builder-dark-theme .border-slate-200,
+.resume-builder-dark-theme .border-slate-350,
+.resume-builder-dark-theme .border-slate-300,
+.resume-builder-dark-theme .border-slate-100,
+.resume-builder-dark-theme .divide-slate-100,
+.resume-builder-dark-theme .divide-slate-200,
+.resume-builder-dark-theme table,
+.resume-builder-dark-theme tr,
+.resume-builder-dark-theme td,
+.resume-builder-dark-theme th {
+  border-color: #1e293b !important;
+}
+
+.resume-builder-dark-theme .text-slate-950,
+.resume-builder-dark-theme .text-slate-900,
+.resume-builder-dark-theme .text-slate-700,
+.resume-builder-dark-theme .text-slate-650,
+.resume-builder-dark-theme .text-slate-600,
+.resume-builder-dark-theme .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.resume-builder-dark-theme nav button {
+  color: #94a3b8 !important;
+}
+
+.resume-builder-dark-theme nav button:hover {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  color: #ffffff !important;
+}
+
+.resume-builder-dark-theme nav button.bg-blue-50 {
+  background-color: rgba(30, 58, 138, 0.4) !important;
+  border-left-color: #3b82f6 !important;
+  color: #3b82f6 !important;
+}
+
+.resume-builder-dark-theme .bg-slate-100 {
+  background-color: #090d16 !important;
+  border-color: #1e293b !important;
+}
+
+/* Ensure the resume sheet preview itself stays white */
+.resume-builder-dark-theme .resume-preview-card,
+.resume-builder-dark-theme .resume-preview-card *,
+.resume-builder-dark-theme .resume-preview-sheet,
+.resume-builder-dark-theme .resume-preview-sheet * {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.resume-builder-dark-theme .resume-preview-sheet a,
+.resume-builder-dark-theme .resume-preview-card a {
+  color: #2563eb !important;
+}
+
+/* ── Wizard Step Transition Animations ── */
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.duration-400 {
+  transition-duration: 400ms;
+}
+
+/* Smooth accordion max-height transitions */
+.max-h-0 {
+  max-height: 0;
+}
+
+.max-h-48 {
+  max-height: 12rem;
+}
+
+/* ── Template Select Page ── */
+.template-card-hover {
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.template-card-hover:hover {
+  transform: translateY(-4px);
+}

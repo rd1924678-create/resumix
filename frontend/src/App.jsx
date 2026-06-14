@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard';
 import ResumeBuilder from './pages/ResumeBuilder';
 import ResumePreview from './pages/ResumePreview';
 import AdminDashboard from './pages/AdminDashboard';
+import TemplateSelect from './pages/TemplateSelect';
 
 // Protect standard user routes
 const ProtectedRoute = ({ children }) => {
@@ -90,6 +91,12 @@ const App = () => {
             </ProtectedRoute>
           } />
           
+          <Route path="/select-template" element={
+            <ProtectedRoute>
+              <TemplateSelect />
+            </ProtectedRoute>
+          } />
+
           <Route path="/builder/:id" element={
             <ProtectedRoute>
               <MainLayout>

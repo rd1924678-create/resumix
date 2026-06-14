@@ -38,11 +38,15 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await authService.login(email, password);
       if (res.data.success) {
-        const { token: userToken, ...userData } = res.data;
-        localStorage.setItem('token', userToken);
-        setToken(userToken);
-        setUser(userData);
-        return { success: true };
+        if (res.data.token) {
+          const { token: userToken, ...userData } = res.data;
+          localStorage.setItem('token', userToken);
+          setToken(userToken);
+          setUser(userData);
+          return { success: true, isAdmin: userData.role === 'admin' };
+        } else {
+          return { success: true, requiresOtp: true, otp: res.data.otp };
+        }
       }
     } catch (err) {
       return {
@@ -52,9 +56,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, password) => {
+  const register = async (name, email) => {
     try {
-      const res = await authService.register(name, email, password);
+      const res = await authService.register(name, email);
+      if (res.data.success) {
+        return { success: true, requiresOtp: true, otp: res.data.otp };
+      }
+    } catch (err) {
+      return {
+        success: false,
+        message: err.response?.data?.message || 'Registration failed.'
+      };
+    }
+  };
+
+  const verifyOtp = async (email, otp) => {
+    try {
+      const res = await authService.verifyOtp(email, otp);
       if (res.data.success) {
         const { token: userToken, ...userData } = res.data;
         localStorage.setItem('token', userToken);
@@ -65,7 +83,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       return {
         success: false,
-        message: err.response?.data?.message || 'Registration failed.'
+        message: err.response?.data?.message || 'OTP verification failed.'
       };
     }
   };
@@ -101,7 +119,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, forgotPassword, resetPassword }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, verifyOtp, logout, forgotPassword, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

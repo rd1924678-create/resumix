@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { resumeService } from '../services/api';
-import { Plus, Edit2, Trash2, Eye, FileText, Download, Award, RefreshCw, BarChart2 } from 'lucide-react';
+import { Plus, Trash2, FileText, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -10,6 +10,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const fetchResumes = async () => {
     setLoading(true);
@@ -42,166 +43,134 @@ const Dashboard = () => {
     }
   };
 
-  // Calculate quick metrics
-  const totalResumes = resumes.length;
-  const downloadsCount = resumes.reduce((acc, curr) => acc + (curr.downloadsCount || 0), 0);
-  const highestScore = resumes.length > 0 ? Math.max(...resumes.map(r => r.atsScore || 0)) : 0;
-  const lastUpdated = resumes.length > 0 ? new Date(resumes[0].updatedAt).toLocaleDateString() : 'N/A';
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="md:flex md:items-center md:justify-between mb-8">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold leading-7 text-slate-950 sm:text-3xl sm:truncate">
-            Welcome back, {user?.name}!
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Create and manage recruiter-optimized resumes to maximize interview callbacks.
-          </p>
-        </div>
-        <div className="mt-4 flex md:mt-0 md:ml-4">
+    <div className="min-h-screen bg-slate-950 text-slate-100 relative overflow-hidden flex flex-col font-sans">
+      {/* Background decorations */}
+      <div className="fixed inset-0 bg-grid-white pointer-events-none opacity-[0.02]" />
+      <div className="fixed top-0 left-1/4 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-0 right-1/4 w-[500px] h-[500px] bg-violet-600/5 rounded-full blur-[120px] pointer-events-none" />
+
+      <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full flex-grow flex flex-col justify-start">
+        {/* Header Section */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-10 flex-shrink-0 border-b border-slate-900 pb-6">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-none">
+              Welcome back, {user?.name || 'Candidate'}!
+            </h1>
+            <p className="mt-2 text-xs sm:text-sm text-slate-400">
+              Create, customize, and optimize your ATS-compatible developer resumes.
+            </p>
+          </div>
+          
           <Link
-            to="/builder/new"
-            className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition"
+            to="/select-template"
+            className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 transition shadow-lg shadow-blue-500/15"
           >
-            <Plus className="-ml-1 mr-2 h-5 w-5" />
+            <Plus className="-ml-1 mr-1.5 h-4 w-4" />
             Build New Resume
           </Link>
         </div>
-      </div>
 
-      {/* Analytics Widgets */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-10">
-        <div className="bg-white overflow-hidden border border-slate-200 rounded-xl p-5 flex items-center space-x-4">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-            <FileText className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Total Resumes</p>
-            <p className="text-2xl font-extrabold text-slate-950 mt-1">{totalResumes}</p>
-          </div>
-        </div>
+        {/* Resumes Workspace list */}
+        <div className="flex-grow">
+          {loading ? (
+            <div className="text-center py-16 bg-slate-900/20 border border-slate-900 rounded-2xl">
+              <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-slate-400 text-xs font-semibold">Loading your dashboard workspace...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 bg-rose-950/20 border border-rose-900/30 rounded-2xl text-rose-350 text-xs font-semibold">
+              {error}
+            </div>
+          ) : resumes.length === 0 ? (
+            <div className="text-center py-20 bg-slate-900/20 border border-slate-900 rounded-2xl flex flex-col items-center p-6">
+              <FileText className="h-10 w-10 text-slate-700 mb-4" />
+              <h3 className="font-bold text-white text-base">No resumes yet</h3>
+              <p className="text-slate-400 text-xs mt-1.5 max-w-sm leading-relaxed">
+                Kickstart your application process by building your first ATS-friendly developer resume.
+              </p>
+              <Link
+                to="/select-template"
+                className="mt-6 inline-flex items-center px-4.5 py-2 border border-transparent rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition"
+              >
+                <Plus className="mr-1.5 h-4 w-4" /> Build First Resume
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Your Documents</h2>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-900 text-slate-400 rounded-full border border-slate-850">
+                  {resumes.length}
+                </span>
+              </div>
 
-        <div className="bg-white overflow-hidden border border-slate-200 rounded-xl p-5 flex items-center space-x-4">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
-            <Award className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Top ATS Score</p>
-            <p className="text-2xl font-extrabold text-slate-950 mt-1">{highestScore}/100</p>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden border border-slate-200 rounded-xl p-5 flex items-center space-x-4">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
-            <Download className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">PDF Downloads</p>
-            <p className="text-2xl font-extrabold text-slate-950 mt-1">{downloadsCount}</p>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden border border-slate-200 rounded-xl p-5 flex items-center space-x-4">
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-            <RefreshCw className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Last Updated</p>
-            <p className="text-xl font-bold text-slate-950 mt-1">{lastUpdated}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Resumes List */}
-      <h2 className="text-lg font-bold text-slate-950 mb-4">Your Resumes</h2>
-      
-      {loading ? (
-        <div className="text-center py-10 bg-white border border-slate-200 rounded-xl">
-          <p className="text-slate-500 text-sm">Loading your resumes...</p>
-        </div>
-      ) : error ? (
-        <div className="text-center py-10 bg-rose-50 border border-rose-100 rounded-xl text-rose-800 text-sm">
-          {error}
-        </div>
-      ) : resumes.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-slate-200 rounded-xl flex flex-col items-center">
-          <FileText className="h-12 w-12 text-slate-300 mb-3" />
-          <h3 className="font-bold text-slate-900 text-base">No resumes yet</h3>
-          <p className="text-slate-500 text-sm mt-1 max-w-sm">
-            Kickstart your application process by building your first ATS-friendly developer resume.
-          </p>
-          <Link
-            to="/builder/new"
-            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="mr-1.5 h-4 w-4" /> Build First Resume
-          </Link>
-        </div>
-      ) : (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <ul className="divide-y divide-slate-200">
-            {resumes.map((resume) => (
-              <li key={resume._id} className="hover:bg-slate-50 transition">
-                <div className="px-6 py-5 flex items-center justify-between flex-wrap gap-4">
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <div className="h-10 w-10 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center text-slate-500">
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{resume.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                        <span>Updated: {new Date(resume.updatedAt).toLocaleDateString()}</span>
-                        <span>•</span>
-                        <span className="capitalize">{resume.templateId.replace('-', ' ')} Template</span>
+              {/* Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {resumes.map((resume) => (
+                  <div
+                    key={resume._id}
+                    className="bg-slate-900/35 border border-slate-900 rounded-2xl p-5 hover:border-slate-800 hover:bg-slate-900/60 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
+                  >
+                    <div>
+                      {/* Top Meta info */}
+                      <div className="flex items-center justify-between mb-4.5">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 bg-slate-950 border border-slate-850 px-2 py-0.5 rounded">
+                          {resume.templateId.replace('-', ' ')}
+                        </span>
+                        <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-full border border-slate-850">
+                          <span className={`text-[10px] font-black ${
+                            resume.atsScore >= 80 ? 'text-emerald-450' :
+                            resume.atsScore >= 60 ? 'text-amber-455' : 'text-rose-455'
+                          }`}>
+                            {resume.atsScore}% ATS
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center space-x-3">
-                    {/* Score badge */}
-                    <div className="flex items-center space-x-1 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-                      <span className="text-xs text-slate-500 font-semibold">Score:</span>
-                      <span className={`text-xs font-bold ${
-                        resume.atsScore >= 80 ? 'text-emerald-600' :
-                        resume.atsScore >= 60 ? 'text-amber-600' : 'text-rose-600'
-                      }`}>
-                        {resume.atsScore}/100
-                      </span>
+                      {/* Document Title */}
+                      <h3 className="font-bold text-white text-sm tracking-tight truncate group-hover:text-blue-400 transition-colors">
+                        {resume.title}
+                      </h3>
+
+                      {/* Date details */}
+                      <p className="text-[10px] text-slate-500 font-semibold mt-1">
+                        Updated: {new Date(resume.updatedAt).toLocaleDateString()}
+                      </p>
                     </div>
 
-                    <div className="h-6 w-px bg-slate-200" />
+                    {/* Actions panel */}
+                    <div className="flex items-center justify-between mt-6 pt-3.5 border-t border-slate-950">
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/builder/${resume._id}`}
+                          className="text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 hover:bg-blue-500/20 px-3.5 py-1.5 rounded-lg border border-blue-500/10"
+                        >
+                          Edit
+                        </Link>
+                        <Link
+                          to={`/preview/${resume._id}`}
+                          className="text-[11px] font-bold text-slate-400 hover:text-slate-200 transition-colors bg-slate-900 hover:bg-slate-800 px-3.5 py-1.5 rounded-lg"
+                        >
+                          Preview
+                        </Link>
+                      </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <Link
-                        to={`/builder/${resume._id}`}
-                        className="text-slate-600 hover:text-slate-950 p-2 hover:bg-slate-100 rounded-lg transition"
-                        title="Edit"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Link>
-                      <Link
-                        to={`/preview/${resume._id}`}
-                        className="text-slate-600 hover:text-slate-950 p-2 hover:bg-slate-100 rounded-lg transition"
-                        title="Preview & Print"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Link>
                       <button
                         onClick={() => handleDelete(resume._id)}
-                        className="text-rose-600 hover:text-rose-800 p-2 hover:bg-rose-50 rounded-lg transition"
-                        title="Delete"
+                        className="text-slate-600 hover:text-rose-400 p-1.5 hover:bg-rose-950/20 rounded-lg transition-colors"
+                        title="Delete Resume"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

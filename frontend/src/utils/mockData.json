@@ -1,0 +1,79 @@
+{
+  "personalInfo": {
+    "fullName": "Your Name",
+    "email": "your.email@gmail.com",
+    "phoneNumber": "+91 99999 88888",
+    "location": "City, Country",
+    "linkedinUrl": "https://linkedin.com/in/yourusername",
+    "githubUrl": "https://github.com/yourusername",
+    "portfolioUrl": "https://yourportfolio.com"
+  },
+  "summary": "Highly motivated and detail-oriented Software Engineer with a strong foundation in MERN stack development and cloud infrastructure. Proven track record of building robust web applications, optimizing database performance, and collaborating in agile teams to deliver scalable software solutions.",
+  "education": [
+    {
+      "degree": "B.Tech in Computer Science and Engineering",
+      "college": "State Technical University",
+      "score": "9.2 CGPA",
+      "startDate": "2022",
+      "endDate": "2026"
+    }
+  ],
+  "skills": {
+    "programmingLanguages": ["JavaScript", "C++", "Python", "TypeScript"],
+    "frontend": ["HTML5", "CSS3", "React.js", "Redux Toolkit", "Tailwind CSS"],
+    "backend": ["Node.js", "Express.js", "REST APIs"],
+    "database": ["MongoDB", "MySQL", "PostgreSQL"],
+    "tools": ["Git", "GitHub", "VS Code", "Postman", "Docker"]
+  },
+  "projects": [
+    {
+      "title": "E-Commerce Billing Dashboard",
+      "description": [
+        "Developed a full-stack billing software using MERN Stack with React, Node.js, and MongoDB.",
+        "Integrated JWT authentication and role-based access control, securing sensitive user data.",
+        "Reduced manual billing effort by 70% through automated invoicing and inventory synchronization."
+      ],
+      "technologies": ["React.js", "Node.js", "MongoDB"],
+      "githubLink": "https://github.com/yourusername/dashboard"
+    }
+  ],
+  "internships": [
+    {
+      "role": "Software Developer Intern",
+      "company": "Apex Tech Solutions",
+      "duration": "June 2025 - August 2025",
+      "responsibilities": [
+        "Assisted in developing client-side dashboard panels using React.js and Redux.",
+        "Participated in daily standups and agile sprints, contributing to feature planning and bug fixes."
+      ]
+    }
+  ],
+  "experience": [
+    {
+      "position": "Junior Software Developer",
+      "company": "Innovate Labs",
+      "duration": "Jan 2026 - Present",
+      "description": [
+        "Collaborated on designing backend microservices in Node.js and Express.",
+        "Improved overall application loading latency by 25% by implementing efficient database queries and caching."
+      ]
+    }
+  ],
+  "certifications": [
+    {
+      "name": "AWS Cloud Practitioner",
+      "organization": "Amazon Web Services",
+      "date": "Oct 2025"
+    }
+  ],
+  "languages": [
+    {
+      "language": "English",
+      "proficiency": "Professional Working Proficiency"
+    },
+    {
+      "language": "Hindi",
+      "proficiency": "Native / Bilingual"
+    }
+  ]
+}

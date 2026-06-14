@@ -1,71 +1,123 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { resumeService } from '../services/api';
 import toast from 'react-hot-toast';
 import {
   User, BookOpen, Briefcase, Code, Plus, Trash, Save,
-  ArrowRight, FileText, Sparkles, ChevronRight, CheckCircle, AlertTriangle,
-  GripVertical, ArrowUp, ArrowDown
+  ArrowRight, ArrowLeft, FileText, Sparkles, CheckCircle,
+  AlertTriangle, GripVertical, ArrowUp, ArrowDown, Lock,
+  ChevronRight, Award, Globe, Layers
 } from 'lucide-react';
 import { calculateAtsScore, DEVELOPER_SUGGESTIONS } from '../utils/atsScorer';
 import { getTemplateComponent } from '../templates/ResumeTemplates';
 
+/* ─── Shared input class helper ─── */
+const inputCls = "mt-1 block w-full px-3.5 py-2.5 bg-slate-900/60 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:outline-none transition-all duration-200";
+const labelCls = "block text-xs font-bold uppercase text-slate-400 tracking-wider mb-1";
+
+/* ─── Animated section wrapper ─── */
+const StepPanel = ({ children, direction }) => {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
+  return (
+    <div className={`transition-all duration-400 ease-out ${visible ? 'opacity-100 translate-x-0' : direction === 'next' ? 'opacity-0 translate-x-8' : 'opacity-0 -translate-x-8'}`}>
+      {children}
+    </div>
+  );
+};
+
+/* ─── Steps definition ─── */
+const STEPS = [
+  { id: 'personal',    label: 'Contact',    icon: User,      shortLabel: '1' },
+  { id: 'summary',     label: 'Summary',    icon: FileText,  shortLabel: '2' },
+  { id: 'skills',      label: 'Skills',     icon: Code,      shortLabel: '3' },
+  { id: 'education',   label: 'Education',  icon: BookOpen,  shortLabel: '4' },
+  { id: 'experience',  label: 'Experience', icon: Briefcase, shortLabel: '5' },
+  { id: 'projects',    label: 'Projects',   icon: Layers,    shortLabel: '6' },
+  { id: 'additional',  label: 'Extras',     icon: Award,     shortLabel: '7' },
+];
+
+/* ─── Template name display map ─── */
+const TEMPLATE_NAMES = {
+  'classic':          'Classic Professional',
+  'software-engineer':'Software Engineer ATS',
+  'fresh-graduate':   'Fresh Graduate ATS',
+  'modern-minimal':   'Modern Minimal ATS',
+  'it-professional':  'IT Professional ATS',
+};
+
+const defaultSectionOrder = ['summary','skills','education','experience','projects','certifications','achievements','languages','declaration'];
 
 const ResumeBuilder = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isEdit = id && id !== 'new';
-  const [activeTab, setActiveTab] = useState('personal');
+
+  // Get template, color, and font choices from URL query params (for new resumes)
+  const templateFromUrl = searchParams.get('template') || 'classic';
+  const colorFromUrl = searchParams.get('color') || '#1e293b';
+  const fontFromUrl = searchParams.get('font') || 'sans';
+
+  // If this is a new resume and no template is in URL, redirect to select
+  useEffect(() => {
+    if (!isEdit && !searchParams.get('template')) {
+      navigate('/select-template', { replace: true });
+    }
+  }, [isEdit, searchParams, navigate]);
+
+  const [editorTab, setEditorTab] = useState('edit');
+  const [previewScale, setPreviewScale] = useState(0.5);
+  const previewWrapRef = useRef(null);
+
+  const A4_W = 794;
+  const A4_H = 1123;
+
+  useEffect(() => {
+    const el = previewWrapRef.current;
+    if (!el) return;
+    const calc = () => {
+      const containerW = el.offsetWidth;
+      const targetW = 794;
+      const padX = 32;
+      const scale = (containerW - padX) / targetW;
+      setPreviewScale(Math.min(1, scale));
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [editorTab]);
+
+  const [activeStep, setActiveStep] = useState(0);
+  const [navDirection, setNavDirection] = useState('next');
   const [saveLoading, setSaveLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(isEdit);
   const [selectedRolePreset, setSelectedRolePreset] = useState('');
-
-  // Section ordering
-  const defaultSectionOrder = ['summary', 'skills', 'education', 'experience', 'projects', 'certifications', 'achievements', 'languages', 'declaration'];
   const [sectionOrder, setSectionOrder] = useState(defaultSectionOrder);
   const [dragOverIndex, setDragOverIndex] = useState(null);
-  const dragItem = React.useRef(null);
+  const dragItem = useRef(null);
+  const [completedSteps, setCompletedSteps] = useState(new Set());
 
   const sectionLabels = {
-    summary: 'Professional Summary', skills: 'Technical Skills', education: 'Education',
-    experience: 'Experience', projects: 'Projects', certifications: 'Certifications',
-    achievements: 'Achievements', languages: 'Languages', declaration: 'Self Declaration'
+    summary:'Professional Summary', skills:'Technical Skills', education:'Education',
+    experience:'Experience', projects:'Projects', certifications:'Certifications',
+    achievements:'Achievements', languages:'Languages', declaration:'Self Declaration'
   };
 
-  const moveSection = (index, dir) => {
-    const newOrder = [...sectionOrder];
-    const target = index + dir;
-    if (target < 0 || target >= newOrder.length) return;
-    [newOrder[index], newOrder[target]] = [newOrder[target], newOrder[index]];
-    setSectionOrder(newOrder);
-  };
-
-  const handleDragStart = (index) => { dragItem.current = index; };
-  const handleDragEnter = (index) => { setDragOverIndex(index); };
-  const handleDragEnd = () => {
-    if (dragItem.current !== null && dragOverIndex !== null && dragItem.current !== dragOverIndex) {
-      const newOrder = [...sectionOrder];
-      const dragged = newOrder.splice(dragItem.current, 1)[0];
-      newOrder.splice(dragOverIndex, 0, dragged);
-      setSectionOrder(newOrder);
-    }
-    dragItem.current = null;
-    setDragOverIndex(null);
-  };
-
-  // Setup form
+  // Form setup
   const { register, control, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
-      title: 'My Software Resume',
-      templateId: 'classic',
-      fontSize: 'medium',
-      fontFamily: 'sans',
-      themeColor: '#1e293b',
-      personalInfo: { fullName: '', email: '', phoneNumber: '', location: '', linkedinUrl: '', githubUrl: '', portfolioUrl: '' },
+      title: 'My Resume',
+      templateId: isEdit ? 'classic' : templateFromUrl,
+      fontSize: '11',
+      fontFamily: isEdit ? 'sans' : fontFromUrl,
+      themeColor: isEdit ? '#1e293b' : colorFromUrl,
+      personalInfo: { fullName:'', email:'', phoneNumber:'', location:'', linkedinUrl:'', githubUrl:'', portfolioUrl:'' },
       summary: '',
       education: [],
-      skills: { programmingLanguages: [], frontend: [], backend: [], database: [], tools: [], custom: [] },
+      skills: { programmingLanguages:[], frontend:[], backend:[], database:[], tools:[], custom:[] },
       projects: [],
       internships: [],
       experience: [],
@@ -76,66 +128,87 @@ const ResumeBuilder = () => {
     }
   });
 
-
-  // Watch form values to calculate live ATS score & suggestions
   const formValues = watch();
+  const lockedTemplate = formValues.templateId || templateFromUrl;
   const { score: atsScore, suggestions: atsSuggestions } = calculateAtsScore(formValues);
 
-  // Field arrays for education, experience, internships, projects, certifications, achievements, languages
-  const { fields: eduFields, append: appendEdu, remove: removeEdu } = useFieldArray({ control, name: 'education' });
-  const { fields: expFields, append: appendExp, remove: removeExp } = useFieldArray({ control, name: 'experience' });
-  const { fields: internFields, append: appendIntern, remove: removeIntern } = useFieldArray({ control, name: 'internships' });
-  const { fields: projectFields, append: appendProject, remove: removeProject } = useFieldArray({ control, name: 'projects' });
-  const { fields: certFields, append: appendCert, remove: removeCert } = useFieldArray({ control, name: 'certifications' });
-  const { fields: achFields, append: appendAch, remove: removeAch } = useFieldArray({ control, name: 'achievements' });
-  const { fields: langFields, append: appendLang, remove: removeLang } = useFieldArray({ control, name: 'languages' });
+  // Field arrays
+  const { fields: eduFields,    append: appendEdu,     remove: removeEdu    } = useFieldArray({ control, name: 'education' });
+  const { fields: expFields,    append: appendExp,     remove: removeExp    } = useFieldArray({ control, name: 'experience' });
+  const { fields: internFields, append: appendIntern,  remove: removeIntern } = useFieldArray({ control, name: 'internships' });
+  const { fields: projectFields,append: appendProject, remove: removeProject} = useFieldArray({ control, name: 'projects' });
+  const { fields: certFields,   append: appendCert,    remove: removeCert   } = useFieldArray({ control, name: 'certifications' });
+  const { fields: achFields,    append: appendAch,     remove: removeAch    } = useFieldArray({ control, name: 'achievements' });
+  const { fields: langFields,   append: appendLang,    remove: removeLang   } = useFieldArray({ control, name: 'languages' });
 
-  // Fetch resume if editing
-  useEffect(() => {
-    if (isEdit) {
-      const fetchResume = async () => {
-        try {
-          const res = await resumeService.getById(id);
-          if (res.data.success) {
-            reset(res.data.data);
-          }
-        } catch (err) {
-          toast.error('Failed to load resume data');
-          navigate('/dashboard');
-        } finally {
-          setFetchLoading(false);
-        }
-      };
-      fetchResume();
-    }
-  }, [id, isEdit, reset, navigate]);
-
-  // Sync sectionOrder when editing existing resume
+  // Fetch on edit
   useEffect(() => {
     if (isEdit) {
       resumeService.getById(id).then(res => {
-        if (res.data.success && res.data.data.sectionOrder?.length > 0) {
-          setSectionOrder(res.data.data.sectionOrder);
+        if (res.data.success) {
+          reset(res.data.data);
+          if (res.data.data.sectionOrder?.length > 0) setSectionOrder(res.data.data.sectionOrder);
         }
-      }).catch(() => {});
+      }).catch(() => { toast.error('Failed to load resume'); navigate('/dashboard'); })
+        .finally(() => setFetchLoading(false));
     }
-  }, [id, isEdit]);
+  }, [id, isEdit, reset, navigate]);
 
-  // Apply profile suggestions (MERN, Java, Python)
+  // Mark step complete
+  const markComplete = (idx) => setCompletedSteps(prev => new Set([...prev, idx]));
+
+  const goNext = () => {
+    markComplete(activeStep);
+    setNavDirection('next');
+    setActiveStep(s => Math.min(s + 1, STEPS.length - 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const goPrev = () => {
+    setNavDirection('prev');
+    setActiveStep(s => Math.max(s - 1, 0));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const goToStep = (idx) => {
+    setNavDirection(idx > activeStep ? 'next' : 'prev');
+    setActiveStep(idx);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Role presets
   const handleApplyPreset = (role) => {
     setSelectedRolePreset(role);
     const preset = DEVELOPER_SUGGESTIONS[role];
     if (preset) {
       setValue('summary', preset.summary);
       setValue('skills.programmingLanguages', preset.skills.slice(0, 3));
-      setValue('skills.frontend', preset.skills.filter(s => ['React.js', 'HTML5', 'CSS3', 'Tailwind CSS'].includes(s)));
-      setValue('skills.backend', preset.skills.filter(s => ['Node.js', 'Express.js', 'Spring Boot', 'Django', 'Flask'].includes(s)));
-      setValue('skills.database', preset.skills.filter(s => ['MongoDB', 'MySQL', 'PostgreSQL'].includes(s)));
-      setValue('skills.tools', preset.skills.filter(s => ['Git', 'GitHub', 'REST APIs', 'Maven'].includes(s)));
+      setValue('skills.frontend',  preset.skills.filter(s => ['React.js','HTML5','CSS3','Tailwind CSS'].includes(s)));
+      setValue('skills.backend',   preset.skills.filter(s => ['Node.js','Express.js','Spring Boot','Django','Flask'].includes(s)));
+      setValue('skills.database',  preset.skills.filter(s => ['MongoDB','MySQL','PostgreSQL'].includes(s)));
+      setValue('skills.tools',     preset.skills.filter(s => ['Git','GitHub','REST APIs','Maven'].includes(s)));
     }
   };
 
-  // Submit Handler
+  // Drag reorder
+  const handleDragStart = (i) => { dragItem.current = i; };
+  const handleDragEnter = (i) => { setDragOverIndex(i); };
+  const handleDragEnd   = () => {
+    if (dragItem.current !== null && dragOverIndex !== null && dragItem.current !== dragOverIndex) {
+      const newOrder = [...sectionOrder];
+      const dragged = newOrder.splice(dragItem.current, 1)[0];
+      newOrder.splice(dragOverIndex, 0, dragged);
+      setSectionOrder(newOrder);
+    }
+    dragItem.current = null; setDragOverIndex(null);
+  };
+  const moveSection = (i, dir) => {
+    const newOrder = [...sectionOrder];
+    const t = i + dir;
+    if (t < 0 || t >= newOrder.length) return;
+    [newOrder[i], newOrder[t]] = [newOrder[t], newOrder[i]];
+    setSectionOrder(newOrder);
+  };
+
+  // Submit
   const onSubmit = async (data) => {
     setSaveLoading(true);
     try {
@@ -143,9 +216,8 @@ const ResumeBuilder = () => {
       if (isEdit) {
         res = await resumeService.update(id, { ...data, sectionOrder });
       } else {
-        res = await resumeService.create({ ...data, sectionOrder });
+        res = await resumeService.create({ ...data, templateId: lockedTemplate, sectionOrder });
       }
-
       if (res.data.success) {
         const savedId = isEdit ? id : res.data.data._id;
         toast.success('Resume saved!');
@@ -158,918 +230,709 @@ const ResumeBuilder = () => {
     }
   };
 
-
   if (fetchLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-16 text-center text-slate-500">
-        Loading resume details...
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-400 text-sm">Loading your resume...</p>
+        </div>
       </div>
     );
   }
 
-  const tabs = [
-    { id: 'personal', label: 'Contact', icon: User },
-    { id: 'summary', label: 'Summary', icon: FileText },
-    { id: 'skills', label: 'Skills', icon: Code },
-    { id: 'education', label: 'Education', icon: BookOpen },
-    { id: 'experience', label: 'Experience', icon: Briefcase },
-    { id: 'projects', label: 'Projects', icon: FileText },
-    { id: 'additional', label: 'Others', icon: Sparkles }
-  ];
-
-  const handleNextTab = () => {
-    const currentIndex = tabs.findIndex(t => t.id === activeTab);
-    if (currentIndex < tabs.length - 1) {
-      setActiveTab(tabs[currentIndex + 1].id);
-    }
-  };
-
-  const handlePrevTab = () => {
-    const currentIndex = tabs.findIndex(t => t.id === activeTab);
-    if (currentIndex > 0) {
-      setActiveTab(tabs[currentIndex - 1].id);
-    }
-  };
-
+  const currentStep = STEPS[activeStep];
+  const isLastStep = activeStep === STEPS.length - 1;
+  const progressPct = Math.round(((activeStep + 1) / STEPS.length) * 100);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Top Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <input
-              {...register('title')}
-              className="text-xl font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none px-1 py-0.5"
+    <div className="min-h-screen bg-slate-950 resume-builder-dark-theme">
+      <div className="fixed inset-0 bg-grid-white pointer-events-none opacity-50" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* ── Top header bar ── */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <div>
+              <input
+                {...register('title')}
+                className="text-xl font-black text-white bg-transparent border-b border-transparent hover:border-slate-600 focus:border-blue-500 focus:outline-none px-1 py-0.5 transition-colors"
+              />
+              <p className="text-slate-500 text-xs mt-0.5 pl-1">Click to rename your resume</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Locked template badge */}
+            <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2">
+              <Lock className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
+              <span className="text-xs font-bold text-slate-300">
+                {TEMPLATE_NAMES[lockedTemplate] || lockedTemplate}
+              </span>
+              <span className="text-[9px] text-blue-400 bg-blue-950/60 border border-blue-800/40 px-1.5 py-0.5 rounded-lg font-bold uppercase">Locked</span>
+            </div>
+
+            {/* Font family */}
+            <select {...register('fontFamily')} className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
+              <option value="sans">System Sans</option>
+              <option value="serif">System Serif</option>
+              <option value="times">Times New Roman</option>
+              <option value="arial">Arial</option>
+              <option value="georgia">Georgia</option>
+              <option value="calibri">Calibri</option>
+              <option value="helvetica">Helvetica</option>
+            </select>
+
+            {/* Font size */}
+            <select {...register('fontSize')} className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
+              {['9','10','11','12','13','14'].map(s => (
+                <option key={s} value={s}>{s}pt{s === '11' ? ' (Default)' : ''}</option>
+              ))}
+            </select>
+
+            {/* Theme color */}
+            <select {...register('themeColor')} className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
+              <option value="#1e293b">Slate Blue</option>
+              <option value="#1d4ed8">Royal Blue</option>
+              <option value="#0f766e">Deep Teal</option>
+              <option value="#111827">Midnight Black</option>
+              <option value="#701a75">Deep Purple</option>
+            </select>
+
+            {/* Save button */}
+            <button
+              onClick={handleSubmit(onSubmit)}
+              disabled={saveLoading}
+              className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {saveLoading ? 'Saving...' : 'Save & Preview'}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Progress Stepper ── */}
+        <div className="mb-8 no-print">
+          {/* Progress bar */}
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold text-slate-400">Step {activeStep + 1} of {STEPS.length}</span>
+            <span className="text-xs font-bold text-blue-400">{progressPct}% Complete</span>
+          </div>
+          <div className="w-full bg-slate-800 rounded-full h-1.5 mb-6">
+            <div
+              className="h-1.5 bg-gradient-to-r from-blue-500 to-violet-500 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progressPct}%` }}
             />
           </div>
-          <p className="text-slate-500 text-xs mt-1">Click the name above to rename this resume</p>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Template */}
-          <select
-            {...register('templateId')}
-            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            title="Choose Template Layout"
-          >
-            <option value="classic">Classic Professional</option>
-            <option value="software-engineer">Software Engineer ATS</option>
-            <option value="fresh-graduate">Fresh Graduate ATS</option>
-            <option value="modern-minimal">Modern Minimal ATS</option>
-            <option value="it-professional">IT Professional ATS</option>
-          </select>
-
-          {/* Font Family */}
-          <select
-            {...register('fontFamily')}
-            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            title="Font Family"
-          >
-            <option value="sans">System Sans-Serif</option>
-            <option value="serif">System Serif</option>
-            <option value="mono">System Monospace</option>
-            <option value="times">Times New Roman</option>
-            <option value="arial">Arial</option>
-            <option value="georgia">Georgia</option>
-            <option value="garamond">Garamond</option>
-            <option value="courier">Courier New</option>
-            <option value="helvetica">Helvetica</option>
-            <option value="calibri">Calibri</option>
-          </select>
-
-          {/* Font Size */}
-          <select
-            {...register('fontSize')}
-            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            title="Font Size"
-          >
-            <option value="9">9pt</option>
-            <option value="10">10pt</option>
-            <option value="11">11pt (Default)</option>
-            <option value="12">12pt</option>
-            <option value="13">13pt</option>
-            <option value="14">14pt</option>
-            <option value="15">15pt</option>
-            <option value="16">16pt</option>
-          </select>
-
-          {/* Theme Color */}
-          <select
-            {...register('themeColor')}
-            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            title="Theme Accent Color"
-          >
-            <option value="#1e293b">Slate Blue (Dark)</option>
-            <option value="#1d4ed8">Royal Blue (Developer)</option>
-            <option value="#0f766e">Deep Teal (Creative)</option>
-            <option value="#111827">Midnight Black (ATS Standard)</option>
-            <option value="#701a75">Deep Purple (Modern)</option>
-          </select>
-
-          <button
-            onClick={handleSubmit(onSubmit)}
-            disabled={saveLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition disabled:opacity-55"
-          >
-            <Save className="h-4 w-4" />
-            {saveLoading ? 'Saving...' : 'Save Resume'}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Sidebar tabs */}
-        <div className="lg:col-span-3 xl:col-span-2 space-y-2 no-print">
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900 text-sm">Resume Sections</h3>
-            </div>
-            <nav className="divide-y divide-slate-100">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center px-4 py-3.5 text-sm font-semibold transition text-left ${
-                      activeTab === tab.id
-                        ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* Live Score Checker */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-              <span className="font-bold text-slate-900 text-sm">ATS Score</span>
-              <span className={`text-base font-black px-2 py-0.5 rounded ${
-                atsScore >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                atsScore >= 60 ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                'bg-rose-50 text-rose-700 border border-rose-100'
-              }`}>
-                {atsScore}/100
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              <div className="w-full bg-slate-100 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    atsScore >= 80 ? 'bg-emerald-500' :
-                    atsScore >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+          {/* Step pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
+            {STEPS.map((step, idx) => {
+              const Icon = step.icon;
+              const isActive = idx === activeStep;
+              const isDone = completedSteps.has(idx) && !isActive;
+              return (
+                <button
+                  key={step.id}
+                  onClick={() => goToStep(idx)}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-lg shadow-blue-500/25'
+                      : isDone
+                        ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-950'
+                        : 'bg-slate-900/60 text-slate-500 border border-slate-800 hover:text-slate-300 hover:border-slate-700'
                   }`}
-                  style={{ width: `${atsScore}%` }}
-                />
-              </div>
+                >
+                  {isDone ? (
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Icon className="h-3.5 w-3.5" />
+                  )}
+                  <span className="hidden sm:inline">{step.label}</span>
+                  <span className="sm:hidden">{step.shortLabel}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Mobile Tab Toggle */}
+        <div className="xl:hidden flex justify-center mb-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-1 flex items-center">
+            <button
+              type="button"
+              onClick={() => setEditorTab('edit')}
+              className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${
+                editorTab === 'edit'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Form Editor
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditorTab('preview')}
+              className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${
+                editorTab === 'preview'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Live Preview
+            </button>
+          </div>
+        </div>
 
+        {/* ── Main 2-column grid ── */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+
+          {/* Left: Form Panel */}
+          <div className={`xl:col-span-7 ${editorTab === 'edit' ? 'block' : 'hidden xl:block'}`}>
+
+            {/* ATS Score card (above form) */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 mb-5 flex items-center gap-5 no-print">
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-300">ATS Score</span>
+                  <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg ${
+                    atsScore >= 80 ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800' :
+                    atsScore >= 60 ? 'bg-amber-950/60 text-amber-400 border border-amber-800' :
+                    'bg-rose-950/60 text-rose-400 border border-rose-800'
+                  }`}>{atsScore}/100</span>
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      atsScore >= 80 ? 'bg-emerald-500' : atsScore >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${atsScore}%` }}
+                  />
+                </div>
+              </div>
               {atsSuggestions.length === 0 ? (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 p-2.5 rounded border border-emerald-100">
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Resume fully ATS optimized!</span>
+                <div className="flex items-center gap-1.5 text-xs text-emerald-400 whitespace-nowrap">
+                  <CheckCircle className="h-4 w-4" /> Fully Optimized!
                 </div>
               ) : (
-                <div className="space-y-1.5 max-h-56 overflow-y-auto pt-1">
-                  {atsSuggestions.map((sug, i) => (
-                    <div key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
-                      <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <span>{sug}</span>
-                    </div>
-                  ))}
+                <div className="text-xs text-amber-400 flex items-center gap-1.5 whitespace-nowrap">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  {atsSuggestions.length} suggestion{atsSuggestions.length > 1 ? 's' : ''}
                 </div>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Tab contents forms */}
-        <div className="lg:col-span-9 xl:col-span-5 bg-white border border-slate-200 rounded-xl p-6 sm:p-8">
-          {activeTab === 'personal' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">Personal & Contact Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Full Name</label>
-                  <input
-                    {...register('personalInfo.fullName', { required: true })}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="Rahul Kumar"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Email Address</label>
-                  <input
-                    {...register('personalInfo.email', { required: true })}
-                    type="email"
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="rahul@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Phone Number</label>
-                  <input
-                    {...register('personalInfo.phoneNumber', { required: true })}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="+91 98765 43210"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Location</label>
-                  <input
-                    {...register('personalInfo.location', { required: true })}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="New Delhi, India"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">LinkedIn URL</label>
-                  <input
-                    {...register('personalInfo.linkedinUrl')}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="https://linkedin.com/in/username"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">GitHub URL</label>
-                  <input
-                    {...register('personalInfo.githubUrl')}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="https://github.com/username"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Portfolio Website URL</label>
-                  <input
-                    {...register('personalInfo.portfolioUrl')}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="https://portfolio.com"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'summary' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-lg font-bold text-slate-900">Professional Summary</h3>
-                <span className="text-xs text-slate-500">Character count: {formValues.summary?.length || 0}/400</span>
-              </div>
-
-              {/* Developer Presets */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Smart Preset Tools:</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('mern')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'mern'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    MERN Stack Dev
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('java')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'java'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Java Developer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('python')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'python'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Python / Django Dev
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('software_developer')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'software_developer'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Software Developer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('frontend_engineer')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'frontend_engineer'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Frontend Engineer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('backend_engineer')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'backend_engineer'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Backend Engineer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('devops_engineer')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'devops_engineer'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    DevOps Engineer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('data_scientist')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'data_scientist'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Data Scientist
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('web_developer')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'web_developer'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Web Developer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('fullstack_developer')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                      selectedRolePreset === 'fullstack_developer'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Full Stack Developer
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <textarea
-                  {...register('summary')}
-                  rows={6}
-                  maxLength={400}
-                  className="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                  placeholder="Write a brief professional summary focusing on your technologies and engineering background..."
-                />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'skills' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">Technical Skills Matrix</h3>
-              <p className="text-xs text-slate-500 -mt-3">Comma separated list (e.g. JavaScript, Python, C++)</p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Programming Languages</label>
-                  <input
-                    type="text"
-                    defaultValue={formValues.skills?.programmingLanguages?.join(', ')}
-                    onChange={(e) => setValue('skills.programmingLanguages', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="JavaScript, Python, C++, Java"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Frontend Technologies</label>
-                  <input
-                    type="text"
-                    defaultValue={formValues.skills?.frontend?.join(', ')}
-                    onChange={(e) => setValue('skills.frontend', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="React, Tailwind CSS, HTML5, CSS3"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Backend Tech</label>
-                  <input
-                    type="text"
-                    defaultValue={formValues.skills?.backend?.join(', ')}
-                    onChange={(e) => setValue('skills.backend', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Node.js, Express.js, Spring Boot"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Databases</label>
-                  <input
-                    type="text"
-                    defaultValue={formValues.skills?.database?.join(', ')}
-                    onChange={(e) => setValue('skills.database', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="MongoDB, MySQL, PostgreSQL"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 tracking-wider">Developer Tools</label>
-                  <input
-                    type="text"
-                    defaultValue={formValues.skills?.tools?.join(', ')}
-                    onChange={(e) => setValue('skills.tools', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Git, GitHub, Docker, Postman"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'education' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-lg font-bold text-slate-900">Education Background</h3>
-                <button
-                  type="button"
-                  onClick={() => appendEdu({ degree: '', college: '', university: '', startDate: '', endDate: '', score: '' })}
-                  className="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1 transition"
-                >
-                  <Plus className="h-4 w-4" /> Add Education
-                </button>
-              </div>
-
-              {eduFields.map((field, idx) => (
-                <div key={field.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative space-y-4">
-                  <button
-                    type="button"
-                    onClick={() => removeEdu(idx)}
-                    className="absolute top-4 right-4 text-rose-500 hover:bg-rose-100 p-1.5 rounded-lg transition"
-                    title="Remove"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </button>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500">Degree / Qualification</label>
-                      <input
-                        {...register(`education.${idx}.degree`, { required: true })}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        placeholder="B.Tech Computer Science"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500">College / Institute</label>
-                      <input
-                        {...register(`education.${idx}.college`, { required: true })}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        placeholder="ABC Institute of Technology"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500">University / Board</label>
-                      <input
-                        {...register(`education.${idx}.university`)}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        placeholder="State Technical University"
-                      />
-                    </div>
-                    <div className="md:col-span-2 flex items-center space-x-2 pt-2">
-                      <input
-                        type="checkbox"
-                        id={`education-${idx}-pursuing`}
-                        {...register(`education.${idx}.isPursuing`)}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <label htmlFor={`education-${idx}-pursuing`} className="text-xs font-semibold text-slate-700 select-none">
-                        Currently Pursuing this Degree
-                      </label>
-                    </div>
-                    {!formValues.education?.[idx]?.isPursuing && (
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500">CGPA / Percentage</label>
-                        <input
-                          {...register(`education.${idx}.score`)}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                          placeholder="8.9 CGPA or 85%"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500">Start Date</label>
-                      <input
-                        {...register(`education.${idx}.startDate`)}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        placeholder="July 2022"
-                      />
-                    </div>
-                    {!formValues.education?.[idx]?.isPursuing && (
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500">End Date</label>
-                        <input
-                          {...register(`education.${idx}.endDate`)}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                          placeholder="June 2026 (or Expected)"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'experience' && (
-            <div className="space-y-8">
-              {/* Internships */}
-              <div className="space-y-6">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h3 className="text-lg font-bold text-slate-900">Internship Roles</h3>
-                  <button
-                    type="button"
-                    onClick={() => appendIntern({ company: '', role: '', duration: '', responsibilities: [''] })}
-                    className="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1 transition"
-                  >
-                    <Plus className="h-4 w-4" /> Add Internship
-                  </button>
-                </div>
-
-                {internFields.map((field, idx) => (
-                  <div key={field.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative space-y-4">
-                    <button
-                      type="button"
-                      onClick={() => removeIntern(idx)}
-                      className="absolute top-4 right-4 text-rose-500 hover:bg-rose-100 p-1.5 rounded-lg transition"
-                    >
-                      <Trash className="h-4 w-4" />
-                    </button>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500">Company Name</label>
-                        <input
-                          {...register(`internships.${idx}.company`, { required: true })}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                          placeholder="Google, Infosys, Startup"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500">Role / Designation</label>
-                        <input
-                          {...register(`internships.${idx}.role`, { required: true })}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                          placeholder="MERN Stack Intern"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-bold uppercase text-slate-500">Duration (e.g. June 2025 - August 2025)</label>
-                        <input
-                          {...register(`internships.${idx}.duration`)}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                          placeholder="3 Months (Summer 2025)"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-bold uppercase text-slate-500">Key Responsibilities (Comma separated bullets)</label>
-                        <textarea
-                          defaultValue={formValues.internships?.[idx]?.responsibilities?.join('\n')}
-                          onChange={(e) => setValue(`internships.${idx}.responsibilities`, e.target.value.split('\n').filter(Boolean))}
-                          rows={3}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                          placeholder="Developed core billing engines&#10;Handled API integrations&#10;Fixed 20+ interface bugs"
-                        />
-                      </div>
-                    </div>
+            {/* ── ATS suggestions list ── */}
+            {atsSuggestions.length > 0 && (
+              <div className="bg-amber-950/20 border border-amber-800/30 rounded-2xl p-4 mb-5 space-y-2 no-print">
+                {atsSuggestions.slice(0, 3).map((sug, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                    {sug}
                   </div>
                 ))}
               </div>
-
-              {/* Work Experience */}
-              <div className="space-y-6">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h3 className="text-lg font-bold text-slate-900">Other Work History</h3>
-                  <button
-                    type="button"
-                    onClick={() => appendExp({ company: '', position: '', duration: '', description: [''] })}
-                    className="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1 transition"
-                  >
-                    <Plus className="h-4 w-4" /> Add Experience
-                  </button>
-                </div>
-
-                {expFields.map((field, idx) => (
-                  <div key={field.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative space-y-4">
-                    <button
-                      type="button"
-                      onClick={() => removeExp(idx)}
-                      className="absolute top-4 right-4 text-rose-500 hover:bg-rose-100 p-1.5 rounded-lg transition"
-                    >
-                      <Trash className="h-4 w-4" />
-                    </button>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500">Company / Organization</label>
-                        <input
-                          {...register(`experience.${idx}.company`, { required: true })}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500">Job Title</label>
-                        <input
-                          {...register(`experience.${idx}.position`, { required: true })}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-bold uppercase text-slate-500">Duration</label>
-                        <input
-                          {...register(`experience.${idx}.duration`)}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-bold uppercase text-slate-500">Role description (Line separated bullet points)</label>
-                        <textarea
-                          defaultValue={formValues.experience?.[idx]?.description?.join('\n')}
-                          onChange={(e) => setValue(`experience.${idx}.description`, e.target.value.split('\n').filter(Boolean))}
-                          rows={3}
-                          className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'projects' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-lg font-bold text-slate-900">Project Contributions</h3>
-                <button
-                  type="button"
-                  onClick={() => appendProject({ title: '', description: [''], technologies: [], githubLink: '', liveDemoLink: '' })}
-                  className="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1 transition"
-                >
-                  <Plus className="h-4 w-4" /> Add Project
-                </button>
-              </div>
-
-              {projectFields.map((field, idx) => (
-                <div key={field.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative space-y-4">
-                  <button
-                    type="button"
-                    onClick={() => removeProject(idx)}
-                    className="absolute top-4 right-4 text-rose-500 hover:bg-rose-100 p-1.5 rounded-lg transition"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </button>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold uppercase text-slate-500">Project Title</label>
-                      <input
-                        {...register(`projects.${idx}.title`, { required: true })}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none"
-                        placeholder="E-Commerce Billing Dashboard"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500">GitHub Code Link</label>
-                      <input
-                        {...register(`projects.${idx}.githubLink`)}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 text-sm rounded-lg focus:outline-none"
-                        placeholder="https://github.com/user/project"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500">Live Demo Link</label>
-                      <input
-                        {...register(`projects.${idx}.liveDemoLink`)}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 text-sm rounded-lg focus:outline-none"
-                        placeholder="https://project-demo.com"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold uppercase text-slate-500">Technologies Used (Comma separated)</label>
-                      <input
-                        type="text"
-                        defaultValue={formValues.projects?.[idx]?.technologies?.join(', ')}
-                        onChange={(e) => setValue(`projects.${idx}.technologies`, e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 text-sm rounded-lg focus:outline-none"
-                        placeholder="React, Node.js, Express, MongoDB"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold uppercase text-slate-500">Project Bullets (One sentence per line)</label>
-                      <textarea
-                        defaultValue={formValues.projects?.[idx]?.description?.join('\n')}
-                        onChange={(e) => setValue(`projects.${idx}.description`, e.target.value.split('\n').filter(Boolean))}
-                        rows={3}
-                        className="mt-1 block w-full px-3 py-2 border border-slate-300 text-sm rounded-lg focus:outline-none"
-                        placeholder="• Designed responsive React analytics screens.&#10;• Decreased manual query delays by 30% via index keys."
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'additional' && (
-            <div className="space-y-8">
-              {/* Certifications */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <h3 className="text-base font-bold text-slate-900">Certificates & Badges</h3>
-                  <button
-                    type="button"
-                    onClick={() => appendCert({ name: '', organization: '', date: '' })}
-                    className="text-xs font-bold text-blue-600 flex items-center gap-1"
-                  >
-                    <Plus className="h-4 w-4" /> Add Certificate
-                  </button>
-                </div>
-
-                {certFields.map((field, idx) => (
-                  <div key={field.id} className="flex gap-4 items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <input
-                      {...register(`certifications.${idx}.name`, { required: true })}
-                      placeholder="AWS Cloud Practitioner"
-                      className="w-1/3 px-2 py-1.5 text-xs border rounded-lg"
-                    />
-                    <input
-                      {...register(`certifications.${idx}.organization`, { required: true })}
-                      placeholder="Amazon Web Services"
-                      className="w-1/3 px-2 py-1.5 text-xs border rounded-lg"
-                    />
-                    <input
-                      {...register(`certifications.${idx}.date`)}
-                      placeholder="Oct 2025"
-                      className="w-1/4 px-2 py-1.5 text-xs border rounded-lg"
-                    />
-                    <button type="button" onClick={() => removeCert(idx)} className="text-rose-500">
-                      <Trash className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Achievements */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <h3 className="text-base font-bold text-slate-900">Academic Achievements</h3>
-                  <button
-                    type="button"
-                    onClick={() => appendAch({ title: '', description: '' })}
-                    className="text-xs font-bold text-blue-600 flex items-center gap-1"
-                  >
-                    <Plus className="h-4 w-4" /> Add Achievement
-                  </button>
-                </div>
-
-                {achFields.map((field, idx) => (
-                  <div key={field.id} className="flex gap-4 items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <input
-                      {...register(`achievements.${idx}.title`, { required: true })}
-                      placeholder="Hackathon Winner"
-                      className="w-1/3 px-2 py-1.5 text-xs border rounded-lg"
-                    />
-                    <input
-                      {...register(`achievements.${idx}.description`, { required: true })}
-                      placeholder="Won 1st prize out of 100 teams"
-                      className="w-1/2 px-2 py-1.5 text-xs border rounded-lg"
-                    />
-                    <button type="button" onClick={() => removeAch(idx)} className="text-rose-500">
-                      <Trash className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Languages */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <h3 className="text-base font-bold text-slate-900">Languages</h3>
-                  <button
-                    type="button"
-                    onClick={() => appendLang({ language: '', proficiency: '' })}
-                    className="text-xs font-bold text-blue-600 flex items-center gap-1"
-                  >
-                    <Plus className="h-4 w-4" /> Add Language
-                  </button>
-                </div>
-
-                {langFields.map((field, idx) => (
-                  <div key={field.id} className="flex gap-4 items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <input
-                      {...register(`languages.${idx}.language`, { required: true })}
-                      placeholder="English"
-                      className="w-1/2 px-2 py-1.5 text-xs border rounded-lg"
-                    />
-                    <input
-                      {...register(`languages.${idx}.proficiency`)}
-                      placeholder="Professional Working"
-                      className="w-2/5 px-2 py-1.5 text-xs border rounded-lg"
-                    />
-                    <button type="button" onClick={() => removeLang(idx)} className="text-rose-500">
-                      <Trash className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Self Declaration */}
-              <div className="space-y-4 pt-4 border-t border-slate-100">
-                <div className="flex justify-between items-center pb-2">
-                  <h3 className="text-base font-bold text-slate-900">Self Declaration</h3>
-                </div>
-                <div>
-                  <textarea
-                    {...register('declaration')}
-                    rows={3}
-                    className="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="I hereby declare that all the details mentioned above are true to the best of my knowledge and belief."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div className="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center no-print">
-            <button
-              type="button"
-              onClick={handlePrevTab}
-              disabled={activeTab === 'personal'}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Previous Section
-            </button>
-
-            {activeTab === 'additional' ? (
-              <button
-                onClick={handleSubmit(onSubmit)}
-                disabled={saveLoading}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition disabled:opacity-55"
-              >
-                <Save className="h-4 w-4" />
-                {saveLoading ? 'Saving...' : 'Save & Preview Resume'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleNextTab}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition flex items-center gap-1"
-              >
-                Next Section
-                <ChevronRight className="h-4 w-4" />
-              </button>
             )}
-          </div>
-        </div>
 
-        {/* Live preview section on the right side */}
-        <div className="lg:col-span-12 xl:col-span-5 space-y-4">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sticky top-24 max-h-[80vh] overflow-y-auto shadow-inner">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-4">
-              <h3 className="font-bold text-slate-900 text-sm">Live ATS Preview</h3>
-              <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                {formValues.templateId?.replace('-', ' ')}
-              </span>
+            {/* ── Step Form Card ── */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8">
+              <div className="flex items-center gap-3 border-b border-slate-800 pb-5 mb-6">
+                {React.createElement(currentStep.icon, { className: "h-5 w-5 text-blue-400" })}
+                <h2 className="text-lg font-black text-white">{currentStep.label}</h2>
+                <span className="ml-auto text-xs text-slate-500 bg-slate-800 px-2.5 py-1 rounded-lg font-medium">
+                  {activeStep + 1} / {STEPS.length}
+                </span>
+              </div>
+
+              <StepPanel key={activeStep} direction={navDirection}>
+
+                {/* ═══════ PERSONAL INFO ═══════ */}
+                {currentStep.id === 'personal' && (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {[
+                        { label: 'Full Name', field: 'personalInfo.fullName', placeholder: 'Rahul Kumar', required: true },
+                        { label: 'Email Address', field: 'personalInfo.email', placeholder: 'rahul@example.com', required: true, type: 'email' },
+                        { label: 'Phone Number', field: 'personalInfo.phoneNumber', placeholder: '+91 98765 43210', required: true },
+                        { label: 'Location', field: 'personalInfo.location', placeholder: 'New Delhi, India', required: true },
+                        { label: 'LinkedIn URL', field: 'personalInfo.linkedinUrl', placeholder: 'https://linkedin.com/in/username' },
+                        { label: 'GitHub URL', field: 'personalInfo.githubUrl', placeholder: 'https://github.com/username' },
+                        { label: 'Portfolio Website', field: 'personalInfo.portfolioUrl', placeholder: 'https://yourportfolio.com' },
+                      ].map(f => (
+                        <div key={f.field} className={f.field === 'personalInfo.portfolioUrl' ? 'md:col-span-2' : ''}>
+                          <label className={labelCls}>{f.label}{f.required && <span className="text-rose-400 ml-1">*</span>}</label>
+                          <input {...register(f.field, f.required ? { required: true } : {})} type={f.type || 'text'} className={inputCls} placeholder={f.placeholder} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ═══════ SUMMARY ═══════ */}
+                {currentStep.id === 'summary' && (
+                  <div className="space-y-5">
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <label className={labelCls}>Professional Summary <span className="text-rose-400">*</span></label>
+                        <span className="text-xs text-slate-500 font-medium">{formValues.summary?.length || 0}/400</span>
+                      </div>
+                      <textarea
+                        {...register('summary')}
+                        rows={6}
+                        maxLength={400}
+                        className={inputCls + ' resize-none'}
+                        placeholder="Write a brief professional summary focusing on your technologies and engineering background..."
+                      />
+                    </div>
+
+                    {/* Presets */}
+                    <div className="bg-slate-950/60 border border-slate-700/60 rounded-xl p-5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">🚀 Smart Role Presets</p>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.keys(DEVELOPER_SUGGESTIONS).map(role => (
+                          <button
+                            key={role}
+                            type="button"
+                            onClick={() => handleApplyPreset(role)}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all duration-200 ${
+                              selectedRolePreset === role
+                                ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20'
+                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                            }`}
+                          >
+                            {role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ═══════ SKILLS ═══════ */}
+                {currentStep.id === 'skills' && (
+                  <div className="space-y-5">
+                    <p className="text-xs text-slate-500">Enter comma-separated values (e.g. React.js, Node.js, MongoDB)</p>
+                    {[
+                      { label: 'Programming Languages', field: 'skills.programmingLanguages', placeholder: 'JavaScript, Python, C++, Java' },
+                      { label: 'Frontend Technologies', field: 'skills.frontend', placeholder: 'React.js, Tailwind CSS, HTML5, CSS3' },
+                      { label: 'Backend Technologies', field: 'skills.backend', placeholder: 'Node.js, Express.js, Spring Boot' },
+                      { label: 'Databases', field: 'skills.database', placeholder: 'MongoDB, MySQL, PostgreSQL' },
+                      { label: 'Developer Tools', field: 'skills.tools', placeholder: 'Git, GitHub, Docker, Postman, Linux' },
+                      { label: 'Other / Libraries', field: 'skills.custom', placeholder: 'Redux, GraphQL, REST APIs, Agile' },
+                    ].map(s => (
+                      <div key={s.field}>
+                        <label className={labelCls}>{s.label}</label>
+                        <input
+                          type="text"
+                          defaultValue={formValues.skills?.[s.field.split('.')[1]]?.join(', ')}
+                          onChange={e => setValue(s.field, e.target.value.split(',').map(v => v.trim()).filter(Boolean))}
+                          className={inputCls}
+                          placeholder={s.placeholder}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ═══════ EDUCATION ═══════ */}
+                {currentStep.id === 'education' && (
+                  <div className="space-y-5">
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => appendEdu({ degree:'', college:'', university:'', startDate:'', endDate:'', score:'', isPursuing: false })}
+                        className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition"
+                      >
+                        <Plus className="h-4 w-4" /> Add Education
+                      </button>
+                    </div>
+
+                    {eduFields.length === 0 && (
+                      <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-700 rounded-xl">
+                        Click "Add Education" to add your academic records
+                      </div>
+                    )}
+
+                    {eduFields.map((field, idx) => (
+                      <div key={field.id} className="bg-slate-950/60 border border-slate-700/60 rounded-xl p-5 relative space-y-4">
+                        <button type="button" onClick={() => removeEdu(idx)} className="absolute top-4 right-4 text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 p-1.5 rounded-lg transition">
+                          <Trash className="h-4 w-4" />
+                        </button>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                          {[
+                            { label:'Degree / Qualification', field:`education.${idx}.degree`, placeholder:'B.Tech Computer Science', req:true },
+                            { label:'College / Institute', field:`education.${idx}.college`, placeholder:'ABC Institute of Technology', req:true },
+                            { label:'University / Board', field:`education.${idx}.university`, placeholder:'State Technical University' },
+                          ].map(f => (
+                            <div key={f.field}>
+                              <label className={labelCls}>{f.label}{f.req && <span className="text-rose-400 ml-1">*</span>}</label>
+                              <input {...register(f.field, f.req ? {required:true}:{})} className={inputCls} placeholder={f.placeholder} />
+                            </div>
+                          ))}
+
+                          <div className="md:col-span-2 flex items-center gap-2">
+                            <input type="checkbox" id={`edu-pursuing-${idx}`} {...register(`education.${idx}.isPursuing`)} className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500" />
+                            <label htmlFor={`edu-pursuing-${idx}`} className="text-xs font-semibold text-slate-400 select-none">Currently Pursuing</label>
+                          </div>
+
+                          {!formValues.education?.[idx]?.isPursuing && (
+                            <div>
+                              <label className={labelCls}>CGPA / Percentage</label>
+                              <input {...register(`education.${idx}.score`)} className={inputCls} placeholder="8.9 CGPA or 85%" />
+                            </div>
+                          )}
+                          <div>
+                            <label className={labelCls}>Start Date</label>
+                            <input {...register(`education.${idx}.startDate`)} className={inputCls} placeholder="July 2022" />
+                          </div>
+                          {!formValues.education?.[idx]?.isPursuing && (
+                            <div>
+                              <label className={labelCls}>End Date</label>
+                              <input {...register(`education.${idx}.endDate`)} className={inputCls} placeholder="June 2026" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ═══════ EXPERIENCE ═══════ */}
+                {currentStep.id === 'experience' && (
+                  <div className="space-y-8">
+                    {/* Internships */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">Internships</h3>
+                        <button type="button" onClick={() => appendIntern({ company:'', role:'', duration:'', responsibilities:[''] })} className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition">
+                          <Plus className="h-4 w-4" /> Add Internship
+                        </button>
+                      </div>
+                      {internFields.length === 0 && <div className="text-center py-6 text-slate-500 text-xs border border-dashed border-slate-700 rounded-xl">Add your internship experience</div>}
+                      {internFields.map((field, idx) => (
+                        <div key={field.id} className="bg-slate-950/60 border border-slate-700/60 rounded-xl p-5 relative">
+                          <button type="button" onClick={() => removeIntern(idx)} className="absolute top-4 right-4 text-rose-400 hover:bg-rose-950/30 p-1.5 rounded-lg transition"><Trash className="h-4 w-4" /></button>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                            {[
+                              { label:'Company Name', field:`internships.${idx}.company`, placeholder:'Google, Infosys, Startup', req:true },
+                              { label:'Role / Designation', field:`internships.${idx}.role`, placeholder:'MERN Stack Intern', req:true },
+                            ].map(f => (
+                              <div key={f.field}>
+                                <label className={labelCls}>{f.label}{f.req && <span className="text-rose-400 ml-1">*</span>}</label>
+                                <input {...register(f.field, {required:true})} className={inputCls} placeholder={f.placeholder} />
+                              </div>
+                            ))}
+                            <div className="md:col-span-2">
+                              <label className={labelCls}>Duration</label>
+                              <input {...register(`internships.${idx}.duration`)} className={inputCls} placeholder="June 2025 – August 2025" />
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className={labelCls}>Key Responsibilities (One per line)</label>
+                              <textarea
+                                defaultValue={formValues.internships?.[idx]?.responsibilities?.join('\n')}
+                                onChange={e => setValue(`internships.${idx}.responsibilities`, e.target.value.split('\n').filter(Boolean))}
+                                rows={3} className={inputCls + ' resize-none'}
+                                placeholder={"Developed core billing engines\nHandled API integrations\nFixed 20+ bugs"}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Work Experience */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">Work Experience</h3>
+                        <button type="button" onClick={() => appendExp({ company:'', position:'', duration:'', description:[''] })} className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition">
+                          <Plus className="h-4 w-4" /> Add Experience
+                        </button>
+                      </div>
+                      {expFields.length === 0 && <div className="text-center py-6 text-slate-500 text-xs border border-dashed border-slate-700 rounded-xl">Add full-time work experience</div>}
+                      {expFields.map((field, idx) => (
+                        <div key={field.id} className="bg-slate-950/60 border border-slate-700/60 rounded-xl p-5 relative">
+                          <button type="button" onClick={() => removeExp(idx)} className="absolute top-4 right-4 text-rose-400 hover:bg-rose-950/30 p-1.5 rounded-lg transition"><Trash className="h-4 w-4" /></button>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                            {[
+                              { label:'Company', field:`experience.${idx}.company`, placeholder:'Microsoft, TCS...', req:true },
+                              { label:'Job Title', field:`experience.${idx}.position`, placeholder:'Backend Engineer', req:true },
+                            ].map(f => (
+                              <div key={f.field}>
+                                <label className={labelCls}>{f.label}{f.req && <span className="text-rose-400 ml-1">*</span>}</label>
+                                <input {...register(f.field, {required:true})} className={inputCls} placeholder={f.placeholder} />
+                              </div>
+                            ))}
+                            <div className="md:col-span-2">
+                              <label className={labelCls}>Duration</label>
+                              <input {...register(`experience.${idx}.duration`)} className={inputCls} placeholder="Jan 2024 – Present" />
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className={labelCls}>Role Description (One per line)</label>
+                              <textarea
+                                defaultValue={formValues.experience?.[idx]?.description?.join('\n')}
+                                onChange={e => setValue(`experience.${idx}.description`, e.target.value.split('\n').filter(Boolean))}
+                                rows={3} className={inputCls + ' resize-none'}
+                                placeholder={"Led a team of 5 engineers\nBuilt scalable REST APIs\nImproved performance by 40%"}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ═══════ PROJECTS ═══════ */}
+                {currentStep.id === 'projects' && (
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => appendProject({ title:'', description:[''], technologies:[], githubLink:'', liveDemoLink:'' })} className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition">
+                        <Plus className="h-4 w-4" /> Add Project
+                      </button>
+                    </div>
+
+                    {projectFields.length === 0 && <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-700 rounded-xl">Add your best technical projects</div>}
+
+                    {projectFields.map((field, idx) => (
+                      <div key={field.id} className="bg-slate-950/60 border border-slate-700/60 rounded-xl p-5 relative">
+                        <button type="button" onClick={() => removeProject(idx)} className="absolute top-4 right-4 text-rose-400 hover:bg-rose-950/30 p-1.5 rounded-lg transition"><Trash className="h-4 w-4" /></button>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                          <div className="md:col-span-2">
+                            <label className={labelCls}>Project Title <span className="text-rose-400">*</span></label>
+                            <input {...register(`projects.${idx}.title`, {required:true})} className={inputCls} placeholder="E-Commerce Dashboard" />
+                          </div>
+                          <div>
+                            <label className={labelCls}>GitHub Link</label>
+                            <input {...register(`projects.${idx}.githubLink`)} className={inputCls} placeholder="https://github.com/user/project" />
+                          </div>
+                          <div>
+                            <label className={labelCls}>Live Demo</label>
+                            <input {...register(`projects.${idx}.liveDemoLink`)} className={inputCls} placeholder="https://yourproject.com" />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className={labelCls}>Technologies (Comma separated)</label>
+                            <input
+                              type="text"
+                              defaultValue={formValues.projects?.[idx]?.technologies?.join(', ')}
+                              onChange={e => setValue(`projects.${idx}.technologies`, e.target.value.split(',').map(v => v.trim()).filter(Boolean))}
+                              className={inputCls} placeholder="React.js, Node.js, MongoDB, Express" />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className={labelCls}>Project Bullets (One per line)</label>
+                            <textarea
+                              defaultValue={formValues.projects?.[idx]?.description?.join('\n')}
+                              onChange={e => setValue(`projects.${idx}.description`, e.target.value.split('\n').filter(Boolean))}
+                              rows={3} className={inputCls + ' resize-none'}
+                              placeholder={"Built responsive UI with React.js\nReduced query time by 35%\nDeployed on AWS EC2"}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ═══════ ADDITIONAL ═══════ */}
+                {currentStep.id === 'additional' && (
+                  <div className="space-y-8">
+
+                    {/* Certifications */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">Certifications</h3>
+                        <button type="button" onClick={() => appendCert({ name:'', organization:'', date:'' })} className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition">
+                          <Plus className="h-4 w-4" /> Add
+                        </button>
+                      </div>
+                      {certFields.map((field, idx) => (
+                        <div key={field.id} className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:items-center bg-slate-900/30 sm:bg-transparent p-3.5 sm:p-0 rounded-xl border border-slate-800/60 sm:border-transparent relative">
+                          <input {...register(`certifications.${idx}.name`, {required:true})} placeholder="AWS Cloud Practitioner" className={inputCls + ' col-span-4'} />
+                          <input {...register(`certifications.${idx}.organization`, {required:true})} placeholder="Amazon Web Services" className={inputCls + ' col-span-4'} />
+                          <input {...register(`certifications.${idx}.date`)} placeholder="Oct 2025" className={inputCls + ' col-span-3'} />
+                          <button type="button" onClick={() => removeCert(idx)} className="col-span-1 text-rose-400 bg-rose-950/20 sm:bg-transparent hover:bg-rose-950/35 p-2 rounded-lg flex items-center justify-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0">
+                            <Trash className="h-4 w-4" />
+                            <span className="sm:hidden text-xs font-semibold">Delete Credential</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Achievements */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">Achievements</h3>
+                        <button type="button" onClick={() => appendAch({ title:'', description:'' })} className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition">
+                          <Plus className="h-4 w-4" /> Add
+                        </button>
+                      </div>
+                      {achFields.map((field, idx) => (
+                        <div key={field.id} className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:items-center bg-slate-900/30 sm:bg-transparent p-3.5 sm:p-0 rounded-xl border border-slate-800/60 sm:border-transparent relative">
+                          <input {...register(`achievements.${idx}.title`, {required:true})} placeholder="Hackathon Winner" className={inputCls + ' col-span-4'} />
+                          <input {...register(`achievements.${idx}.description`, {required:true})} placeholder="Won 1st prize out of 100 teams" className={inputCls + ' col-span-7'} />
+                          <button type="button" onClick={() => removeAch(idx)} className="col-span-1 text-rose-400 bg-rose-950/20 sm:bg-transparent hover:bg-rose-950/35 p-2 rounded-lg flex items-center justify-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0">
+                            <Trash className="h-4 w-4" />
+                            <span className="sm:hidden text-xs font-semibold">Delete Achievement</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Languages */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">Languages</h3>
+                        <button type="button" onClick={() => appendLang({ language:'', proficiency:'' })} className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition">
+                          <Plus className="h-4 w-4" /> Add
+                        </button>
+                      </div>
+                      {langFields.map((field, idx) => (
+                        <div key={field.id} className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:items-center bg-slate-900/30 sm:bg-transparent p-3.5 sm:p-0 rounded-xl border border-slate-800/60 sm:border-transparent relative">
+                          <input {...register(`languages.${idx}.language`, {required:true})} placeholder="English" className={inputCls + ' col-span-5'} />
+                          <input {...register(`languages.${idx}.proficiency`)} placeholder="Fluent / Native" className={inputCls + ' col-span-6'} />
+                          <button type="button" onClick={() => removeLang(idx)} className="col-span-1 text-rose-400 bg-rose-950/20 sm:bg-transparent hover:bg-rose-950/35 p-2 rounded-lg flex items-center justify-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0">
+                            <Trash className="h-4 w-4" />
+                            <span className="sm:hidden text-xs font-semibold">Delete Language</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Section Order */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-bold text-white">Section Order</h3>
+                      <p className="text-xs text-slate-500">Drag or use arrows to reorder how sections appear in your resume</p>
+                      <div className="space-y-2">
+                        {sectionOrder.map((sec, idx) => (
+                          <div
+                            key={sec}
+                            draggable
+                            onDragStart={() => handleDragStart(idx)}
+                            onDragEnter={() => handleDragEnter(idx)}
+                            onDragEnd={handleDragEnd}
+                            className={`flex items-center justify-between bg-slate-950/60 border rounded-xl px-4 py-3 cursor-grab active:cursor-grabbing transition-all duration-200 ${
+                              dragOverIndex === idx ? 'border-blue-500/60 bg-blue-950/20' : 'border-slate-700/60 hover:border-slate-600'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <GripVertical className="h-4 w-4 text-slate-600" />
+                              <span className="text-xs font-semibold text-slate-300">{sectionLabels[sec] || sec}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => moveSection(idx, -1)} className="text-slate-500 hover:text-slate-300 p-1 rounded transition"><ArrowUp className="h-3.5 w-3.5" /></button>
+                              <button type="button" onClick={() => moveSection(idx,  1)} className="text-slate-500 hover:text-slate-300 p-1 rounded transition"><ArrowDown className="h-3.5 w-3.5" /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Self Declaration */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-bold text-white">Self Declaration</h3>
+                      <textarea {...register('declaration')} rows={3} className={inputCls + ' resize-none'}
+                        placeholder="I hereby declare that all the details mentioned above are true to the best of my knowledge..."
+                      />
+                    </div>
+                  </div>
+                )}
+
+              </StepPanel>
+
+              {/* ── Navigation Buttons ── */}
+              <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap gap-4 justify-between items-center no-print">
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  disabled={activeStep === 0}
+                  className="flex items-center gap-2 px-5 py-2.5 border border-slate-700 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:border-slate-600 hover:bg-slate-900 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Previous
+                </button>
+
+                {isLastStep ? (
+                  <button
+                    onClick={handleSubmit(onSubmit)}
+                    disabled={saveLoading}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white rounded-xl text-sm font-black shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 flex-shrink-0"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>{saveLoading ? 'Saving...' : 'Save & Preview'}</span>
+                    <span className="hidden sm:inline"> Resume</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="group flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all"
+                  >
+                    <span>Next</span>
+                    <span className="hidden sm:inline">: {STEPS[activeStep + 1]?.label}</span>
+                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="bg-white border border-slate-200 p-6 rounded-lg shadow-sm scale-95 origin-top min-w-[320px] overflow-x-auto">
-              {React.createElement(getTemplateComponent(formValues.templateId || 'classic'), { data: formValues })}
+          </div>
+
+          {/* Right: Live Preview Panel */}
+          <div className={`xl:col-span-5 no-print ${editorTab === 'preview' ? 'block' : 'hidden xl:block'}`}>
+            <div className="sticky top-6">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                {/* Preview header */}
+                <div className="bg-slate-900 border-b border-slate-800 px-5 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500/70" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-amber-500/70" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" />
+                    </div>
+                    <span className="text-xs text-slate-400 font-mono">live-preview.pdf</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-3 w-3 text-slate-500" />
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">
+                      {TEMPLATE_NAMES[lockedTemplate]}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview body */}
+                <div 
+                  ref={previewWrapRef}
+                  className="bg-slate-950 p-4 overflow-auto max-h-[75vh] flex justify-center items-start"
+                >
+                  <div
+                    style={{
+                      width: `${A4_W * previewScale}px`,
+                      height: `${A4_H * previewScale}px`,
+                      position: 'relative',
+                      flexShrink: 0
+                    }}
+                  >
+                    <div
+                      className="resume-preview-card resume-container"
+                      style={{
+                        width: `${A4_W}px`,
+                        height: `${A4_H}px`,
+                        transform: `scale(${previewScale})`,
+                        transformOrigin: 'top left',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        margin: 0,
+                        backgroundColor: 'white',
+                        borderRadius: '4px',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                        padding: '56px 64px',
+                      }}
+                    >
+                      {React.createElement(getTemplateComponent(lockedTemplate), { data: { ...formValues, templateId: lockedTemplate } })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-center text-xs text-slate-600 mt-3">Live preview updates as you type</p>
             </div>
           </div>
         </div>
@@ -1079,4 +942,3 @@ const ResumeBuilder = () => {
 };
 
 export default ResumeBuilder;
-

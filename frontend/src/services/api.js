@@ -26,8 +26,10 @@ api.interceptors.request.use(
 
 // Centralized API Services
 export const authService = {
-  register: (name, email, password) => api.post('/api/auth/register', { name, email, password }),
+  register: (name, email) => api.post('/api/auth/register', { name, email }),
   login: (email, password) => api.post('/api/auth/login', { email, password }),
+  verifyOtp: (email, otp) => api.post('/api/auth/verify-otp', { email, otp }),
+  checkSecretCode: (code) => api.post('/api/auth/check-secret-code', { code }),
   getProfile: () => api.get('/api/auth/profile'),
   forgotPassword: (email) => api.post('/api/auth/forgot-password', { email }),
   resetPassword: (token, password) => api.post('/api/auth/reset-password', { token, password }),

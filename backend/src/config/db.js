@@ -4,6 +4,21 @@ const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/resumix');
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    
+    // Seed admin
+    const User = require('../models/User');
+    const adminEmail = process.env.ADMIN_EMAIL || 'rd@resumix.com';
+    const adminExists = await User.findOne({ email: adminEmail });
+    if (!adminExists) {
+      await User.create({
+        name: 'Admin',
+        email: adminEmail,
+        password: 'iloveCoding01#',
+        role: 'admin',
+        isVerified: true
+      });
+      console.log(`[SEED] Seeded Admin User: ${adminEmail}`);
+    }
   } catch (error) {
     console.error(`Error connecting to MongoDB: ${error.message}`);
     process.exit(1);
