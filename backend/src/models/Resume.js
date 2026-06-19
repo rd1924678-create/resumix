@@ -65,6 +65,7 @@ const ResumeSchema = new mongoose.Schema({
       university: { type: String, default: '' },
       startDate: { type: String, default: '' },
       endDate: { type: String, default: '' },
+      expectedGraduation: { type: String, default: '' },
       score: { type: String, default: '' },
       isPursuing: { type: Boolean, default: false },
     }

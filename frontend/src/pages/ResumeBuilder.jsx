@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { resumeService } from '../services/api';
+import { resumeService, atsService } from '../services/api';
 import toast from 'react-hot-toast';
 import {
   User, BookOpen, Briefcase, Code, Plus, Trash, Save,
   ArrowRight, ArrowLeft, FileText, Sparkles, CheckCircle,
   AlertTriangle, GripVertical, ArrowUp, ArrowDown, Lock,
-  ChevronRight, Award, Globe, Layers
+  ChevronRight, Award, Globe, Layers, RefreshCw
 } from 'lucide-react';
-import { calculateAtsScore, DEVELOPER_SUGGESTIONS } from '../utils/atsScorer';
 import { getTemplateComponent } from '../templates/ResumeTemplates';
 
 /* ─── Shared input class helper ─── */
@@ -69,18 +68,23 @@ const ResumeBuilder = () => {
 
   const [editorTab, setEditorTab] = useState('edit');
   const [previewScale, setPreviewScale] = useState(0.5);
+  const [sheetHeight, setSheetHeight] = useState(1123);
   const previewWrapRef = useRef(null);
+  const sheetRef = useRef(null);
 
   const A4_W = 794;
   const A4_H = 1123;
+
+
 
   useEffect(() => {
     const el = previewWrapRef.current;
     if (!el) return;
     const calc = () => {
-      const containerW = el.offsetWidth;
+      const parentEl = el.parentElement;
+      const containerW = parentEl ? parentEl.offsetWidth : el.offsetWidth;
       const targetW = 794;
-      const padX = 32;
+      const padX = 36; // Account for inner container padding and borders
       const scale = (containerW - padX) / targetW;
       setPreviewScale(Math.min(1, scale));
     };
@@ -107,7 +111,7 @@ const ResumeBuilder = () => {
   };
 
   // Form setup
-  const { register, control, handleSubmit, reset, watch, setValue } = useForm({
+  const { register, control, handleSubmit, reset, watch, setValue, getValues } = useForm({
     defaultValues: {
       title: 'My Resume',
       templateId: isEdit ? 'classic' : templateFromUrl,
@@ -130,7 +134,123 @@ const ResumeBuilder = () => {
 
   const formValues = watch();
   const lockedTemplate = formValues.templateId || templateFromUrl;
-  const { score: atsScore, suggestions: atsSuggestions } = calculateAtsScore(formValues);
+
+  // Measure dynamic sheet height to prevent clipping
+  useEffect(() => {
+    if (!fetchLoading && sheetRef.current) {
+      const ro = new ResizeObserver(() => {
+        if (sheetRef.current) {
+          const newHeight = sheetRef.current.offsetHeight || 1123;
+          setSheetHeight(prev => Math.abs(prev - newHeight) > 2 ? newHeight : prev);
+        }
+      });
+      ro.observe(sheetRef.current);
+      return () => ro.disconnect();
+    }
+  }, [fetchLoading, formValues]);
+
+  // AI Scoring & Suggestions States
+  const [atsScore, setAtsScore] = useState(0);
+  const [atsSuggestions, setAtsSuggestions] = useState({});
+  const [atsCategories, setAtsCategories] = useState({ impact: 0, brevity: 0, style: 0, sections: 0 });
+  const [atsMissingKeywords, setAtsMissingKeywords] = useState([]);
+  const [aiScoringLoading, setAiScoringLoading] = useState(false);
+  const [customRoleInput, setCustomRoleInput] = useState('');
+  const [customDetailsInput, setCustomDetailsInput] = useState('');
+  const [skillsContextInput, setSkillsContextInput] = useState('');
+  const [skillsAiLoading, setSkillsAiLoading] = useState(false);
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [presetVersion, setPresetVersion] = useState(0);
+  const [experienceAiLoading, setExperienceAiLoading] = useState({ type: '', index: null });
+
+  const getSuggestionsCount = () => {
+    if (!atsSuggestions) return 0;
+    if (Array.isArray(atsSuggestions)) return atsSuggestions.length;
+    if (typeof atsSuggestions === 'object') {
+      return Object.values(atsSuggestions).reduce((acc, curr) => acc + (Array.isArray(curr) ? curr.length : 0), 0);
+    }
+    return 0;
+  };
+
+  const getActiveSuggestions = () => {
+    if (!atsSuggestions) return [];
+    
+    // If it's a structured object (our primary target)
+    if (typeof atsSuggestions === 'object' && !Array.isArray(atsSuggestions)) {
+      return atsSuggestions[currentStep.id] || [];
+    }
+    
+    // Fallback if it's a flat array (filter by keywords matching active step)
+    if (Array.isArray(atsSuggestions)) {
+      const stepKeywords = {
+        personal: ['contact', 'email', 'phone', 'location', 'linkedin', 'github', 'link', 'portfolio', 'fullName', 'address'],
+        summary: ['summary', 'profile', 'objective', 'overview'],
+        skills: ['skill', 'technology', 'technologies', 'programming', 'languages', 'frontend', 'backend', 'database', 'tools'],
+        education: ['education', 'degree', 'college', 'university', 'academic', 'cgpa', 'course', 'score'],
+        experience: ['experience', 'work', 'job', 'position', 'internship', 'company', 'metric', 'action verb', 'bullet'],
+        projects: ['project', 'repo', 'demo', 'live', 'code link', 'github link'],
+        additional: ['certif', 'award', 'achieve', 'language', 'declaration']
+      };
+      
+      const keywords = stepKeywords[currentStep.id] || [];
+      return atsSuggestions.filter(sug => {
+        const lowerSug = sug.toLowerCase();
+        return keywords.some(kw => lowerSug.includes(kw));
+      });
+    }
+    
+    return [];
+  };
+
+  // Live AI scoring triggered once per section transition (activeStep change)
+  useEffect(() => {
+    if (fetchLoading) return;
+    
+    const currentValues = getValues();
+    // Only trigger if there is actual content in the form (like fullName or summary)
+    if (!currentValues.personalInfo?.fullName && !currentValues.summary) return;
+
+    const runScoring = async () => {
+      setAiScoringLoading(true);
+      try {
+        const res = await atsService.scoreBuilderResume(currentValues);
+        if (res.data.success) {
+          const data = res.data.data;
+          setAtsScore(data.score || 0);
+          setAtsSuggestions(data.feedback || []);
+          setAtsCategories(data.categories || { impact: 0, brevity: 0, style: 0, sections: 0 });
+          setAtsMissingKeywords(data.missingKeywords || []);
+        }
+      } catch (err) {
+        console.error('Error fetching live AI ATS score:', err);
+      } finally {
+        setAiScoringLoading(false);
+      }
+    };
+
+    runScoring();
+  }, [activeStep, fetchLoading]);
+
+  const handleManualAudit = async () => {
+    setAiScoringLoading(true);
+    const toastId = toast.loading('Running AI ATS audit...');
+    try {
+      const res = await atsService.scoreBuilderResume(getValues());
+      if (res.data.success) {
+        const data = res.data.data;
+        setAtsScore(data.score || 0);
+        setAtsSuggestions(data.feedback || []);
+        setAtsCategories(data.categories || { impact: 0, brevity: 0, style: 0, sections: 0 });
+        setAtsMissingKeywords(data.missingKeywords || []);
+        toast.success('AI Audit completed!', { id: toastId });
+      }
+    } catch (err) {
+      console.error('Error in manual AI ATS audit:', err);
+      toast.error('AI Audit failed. Please try again.', { id: toastId });
+    } finally {
+      setAiScoringLoading(false);
+    }
+  };
 
   // Field arrays
   const { fields: eduFields,    append: appendEdu,     remove: removeEdu    } = useFieldArray({ control, name: 'education' });
@@ -174,17 +294,180 @@ const ResumeBuilder = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Role presets
-  const handleApplyPreset = (role) => {
-    setSelectedRolePreset(role);
-    const preset = DEVELOPER_SUGGESTIONS[role];
-    if (preset) {
-      setValue('summary', preset.summary);
-      setValue('skills.programmingLanguages', preset.skills.slice(0, 3));
-      setValue('skills.frontend',  preset.skills.filter(s => ['React.js','HTML5','CSS3','Tailwind CSS'].includes(s)));
-      setValue('skills.backend',   preset.skills.filter(s => ['Node.js','Express.js','Spring Boot','Django','Flask'].includes(s)));
-      setValue('skills.database',  preset.skills.filter(s => ['MongoDB','MySQL','PostgreSQL'].includes(s)));
-      setValue('skills.tools',     preset.skills.filter(s => ['Git','GitHub','REST APIs','Maven'].includes(s)));
+  // AI Dynamic Preset Generator
+  const handleGeneratePreset = async (roleName) => {
+    const targetRole = roleName || customRoleInput;
+    if (!targetRole || !targetRole.trim()) {
+      toast.error('Please enter or select a job role first!');
+      return;
+    }
+    
+    setCustomRoleInput(targetRole);
+    setPresetLoading(true);
+    const toastId = toast.loading(`Generating AI preset content for "${targetRole}"...`);
+    
+    try {
+      const res = await atsService.generateRolePreset(targetRole, customDetailsInput);
+      if (res.data.success) {
+        const { summary, skills } = res.data.data;
+        
+        if (summary) setValue('summary', summary);
+        if (skills) {
+          setValue('skills.programmingLanguages', skills.programmingLanguages || []);
+          setValue('skills.frontend', skills.frontend || []);
+          setValue('skills.backend', skills.backend || []);
+          setValue('skills.database', skills.database || []);
+          setValue('skills.tools', skills.tools || []);
+          setValue('skills.custom', skills.custom || []);
+        }
+        
+        // Force remount of skills input elements to read new defaultValues
+        setPresetVersion(v => v + 1);
+        
+        toast.success(`AI content generated and applied for ${targetRole}!`, { id: toastId });
+
+        // Immediately run an audit to show the updated score
+        try {
+          const scoreRes = await atsService.scoreBuilderResume(getValues());
+          if (scoreRes.data.success) {
+            const data = scoreRes.data.data;
+            setAtsScore(data.score || 0);
+            setAtsSuggestions(data.feedback || []);
+            setAtsCategories(data.categories || { impact: 0, brevity: 0, style: 0, sections: 0 });
+            setAtsMissingKeywords(data.missingKeywords || []);
+          }
+        } catch (scoreErr) {
+          console.error('Error running audit after preset generation:', scoreErr);
+        }
+      }
+    } catch (err) {
+      console.error('Preset generation error:', err);
+      toast.error('Failed to generate AI preset. Please try again.', { id: toastId });
+    } finally {
+      setPresetLoading(false);
+    }
+  };
+
+  // AI Dynamic Skills Generator
+  const handleGenerateSkills = async () => {
+    if (!skillsContextInput || !skillsContextInput.trim()) {
+      toast.error('Please enter some context or technology focus first!');
+      return;
+    }
+    
+    setSkillsAiLoading(true);
+    const toastId = toast.loading('Generating targeted skills matrix...');
+    
+    try {
+      const currentSkills = getValues('skills');
+      const res = await atsService.generateSkills(skillsContextInput, currentSkills);
+      if (res.data.success) {
+        const skills = res.data.data;
+        if (skills) {
+          setValue('skills.programmingLanguages', skills.programmingLanguages || []);
+          setValue('skills.frontend', skills.frontend || []);
+          setValue('skills.backend', skills.backend || []);
+          setValue('skills.database', skills.database || []);
+          setValue('skills.tools', skills.tools || []);
+          setValue('skills.custom', skills.custom || []);
+        }
+        
+        // Force remount of skills input elements to read new defaultValues
+        setPresetVersion(v => v + 1);
+        
+        toast.success('AI technical skills matrix generated and applied!', { id: toastId });
+        
+        // Immediately run an audit to update score
+        try {
+          const scoreRes = await atsService.scoreBuilderResume(getValues());
+          if (scoreRes.data.success) {
+            const data = scoreRes.data.data;
+            setAtsScore(data.score || 0);
+            setAtsSuggestions(data.feedback || []);
+            setAtsCategories(data.categories || { impact: 0, brevity: 0, style: 0, sections: 0 });
+            setAtsMissingKeywords(data.missingKeywords || []);
+          }
+        } catch (scoreErr) {
+          console.error('Error running audit after skills generation:', scoreErr);
+        }
+      }
+    } catch (err) {
+      console.error('Skills generation error:', err);
+      toast.error('Failed to generate technical skills. Please try again.', { id: toastId });
+    } finally {
+      setSkillsAiLoading(false);
+    }
+  };
+
+  // AI Experience Bullets Generator
+  const handleGenerateBullets = async (type, index) => {
+    let role = '';
+    let company = '';
+    let extra = {};
+    
+    if (type === 'projects') {
+      const title = getValues(`projects.${index}.title`);
+      const technologies = getValues(`projects.${index}.technologies`);
+      role = title;
+      company = Array.isArray(technologies) ? technologies.join(', ') : (technologies || '');
+      extra = { type: 'project', title, technologies: company };
+    } else {
+      const roleField = type === 'internships' ? `internships.${index}.role` : `experience.${index}.position`;
+      const companyField = type === 'internships' ? `internships.${index}.company` : `experience.${index}.company`;
+      role = getValues(roleField);
+      company = getValues(companyField);
+      extra = { type: 'experience' };
+    }
+    
+    const promptElement = document.getElementById(`ai-${type}-prompt-${index}`);
+    const context = promptElement?.value;
+
+    if (!context || !context.trim()) {
+      toast.error('Please enter a quick description of what you did first!');
+      return;
+    }
+
+    setExperienceAiLoading({ type, index });
+    const toastId = toast.loading('Generating professional bullets with AI...');
+
+    try {
+      const res = await atsService.generateExperienceBullets(role, company, context, extra.type, extra);
+      if (res.data.success) {
+        const { bullets } = res.data.data;
+        if (bullets && Array.isArray(bullets)) {
+          let textareaField = '';
+          if (type === 'projects') {
+            textareaField = `projects.${index}.description`;
+          } else {
+            textareaField = type === 'internships' ? `internships.${index}.responsibilities` : `experience.${index}.description`;
+          }
+          
+          setValue(textareaField, bullets);
+          
+          if (promptElement) promptElement.value = '';
+          setPresetVersion(v => v + 1);
+          toast.success('Professional bullets applied successfully!', { id: toastId });
+          
+          // Immediately trigger scoring audit
+          try {
+            const scoreRes = await atsService.scoreBuilderResume(getValues());
+            if (scoreRes.data.success) {
+              const data = scoreRes.data.data;
+              setAtsScore(data.score || 0);
+              setAtsSuggestions(data.feedback || []);
+              setAtsCategories(data.categories || { impact: 0, brevity: 0, style: 0, sections: 0 });
+              setAtsMissingKeywords(data.missingKeywords || []);
+            }
+          } catch (scoreErr) {
+            console.error('Error running audit after bullets generation:', scoreErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Bullets generation error:', err);
+      toast.error('Failed to generate professional bullets. Please try again.', { id: toastId });
+    } finally {
+      setExperienceAiLoading({ type: '', index: null });
     }
   };
 
@@ -391,10 +674,22 @@ const ResumeBuilder = () => {
           <div className={`xl:col-span-7 ${editorTab === 'edit' ? 'block' : 'hidden xl:block'}`}>
 
             {/* ATS Score card (above form) */}
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 mb-5 flex items-center gap-5 no-print">
-              <div className="flex-1">
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 mb-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-5 no-print">
+              <div className="flex-grow">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-300">ATS Score</span>
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    {aiScoringLoading ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 text-blue-400 animate-spin" />
+                        AI Auditing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
+                        AI ATS Score
+                      </>
+                    )}
+                  </span>
                   <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg ${
                     atsScore >= 80 ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800' :
                     atsScore >= 60 ? 'bg-amber-950/60 text-amber-400 border border-amber-800' :
@@ -410,27 +705,64 @@ const ResumeBuilder = () => {
                   />
                 </div>
               </div>
-              {atsSuggestions.length === 0 ? (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-400 whitespace-nowrap">
-                  <CheckCircle className="h-4 w-4" /> Fully Optimized!
-                </div>
-              ) : (
-                <div className="text-xs text-amber-400 flex items-center gap-1.5 whitespace-nowrap">
-                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                  {atsSuggestions.length} suggestion{atsSuggestions.length > 1 ? 's' : ''}
-                </div>
-              )}
+              
+              <div className="flex items-center gap-3 justify-between sm:justify-end shrink-0">
+                {aiScoringLoading ? (
+                  <span className="text-xs text-slate-500 font-medium">Scanning text...</span>
+                ) : getSuggestionsCount() === 0 ? (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 whitespace-nowrap">
+                    <CheckCircle className="h-4 w-4" /> Fully Optimized!
+                  </div>
+                ) : (
+                  <div className="text-xs text-amber-400 flex items-center gap-1.5 whitespace-nowrap">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                    {getSuggestionsCount()} suggestion{getSuggestionsCount() > 1 ? 's' : ''}
+                  </div>
+                )}
+                
+                <button
+                  type="button"
+                  onClick={handleManualAudit}
+                  disabled={aiScoringLoading}
+                  className="bg-slate-800 border border-slate-700 hover:border-slate-600 hover:bg-slate-750 text-slate-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3 w-3 ${aiScoringLoading ? 'animate-spin' : ''}`} />
+                  Recalculate
+                </button>
+              </div>
             </div>
 
-            {/* ── ATS suggestions list ── */}
-            {atsSuggestions.length > 0 && (
-              <div className="bg-amber-950/20 border border-amber-800/30 rounded-2xl p-4 mb-5 space-y-2 no-print">
-                {atsSuggestions.slice(0, 3).map((sug, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs text-slate-400">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                    {sug}
-                  </div>
-                ))}
+            {/* ── ATS suggestions list (Section-Wise) ── */}
+            {getActiveSuggestions().length > 0 && (
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 mb-5 space-y-3 no-print">
+                <span className="block text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  ⚠️ Optimization Feedback for {currentStep.label}
+                </span>
+                <div className="space-y-2">
+                  {getActiveSuggestions().map((sug, i) => (
+                    <div key={i} className="flex items-start gap-2.5 text-xs text-slate-300 leading-relaxed">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <span>{sug}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── ATS missing keywords ── */}
+            {atsMissingKeywords.length > 0 && (
+              <div className="bg-blue-950/20 border border-blue-900/30 rounded-2xl p-5 mb-5 no-print">
+                <span className="block text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                  Keywords to Add (Recommended)
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {atsMissingKeywords.map((kw, i) => (
+                    <span key={i} className="bg-blue-950 border border-blue-800/50 text-blue-300 text-[10px] font-bold px-2.5 py-1 rounded-lg">
+                      {kw}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -485,24 +817,85 @@ const ResumeBuilder = () => {
                       />
                     </div>
 
-                    {/* Presets */}
+                    {/* AI Custom Preset Generator */}
                     <div className="bg-slate-950/60 border border-slate-700/60 rounded-xl p-5">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">🚀 Smart Role Presets</p>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.keys(DEVELOPER_SUGGESTIONS).map(role => (
-                          <button
-                            key={role}
-                            type="button"
-                            onClick={() => handleApplyPreset(role)}
-                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all duration-200 ${
-                              selectedRolePreset === role
-                                ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20'
-                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'
-                            }`}
-                          >
-                            {role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                          </button>
-                        ))}
+                      <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4 text-violet-400" />
+                        AI Role Preset Generator
+                      </p>
+                      <p className="text-[11px] text-slate-400 mb-4">
+                        Type any target job role to dynamically generate an optimized Professional Summary and Skills matrix using AI.
+                      </p>
+                      
+                      <div className="space-y-4 mb-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Job Role</label>
+                          <input
+                            type="text"
+                            value={customRoleInput}
+                            onChange={e => setCustomRoleInput(e.target.value)}
+                            placeholder="e.g. Cloud Architect, React Developer, DevOps Specialist..."
+                            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            disabled={presetLoading}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleGeneratePreset();
+                              }
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Custom Context / Details (Optional)</label>
+                          <textarea
+                            value={customDetailsInput}
+                            onChange={e => setCustomDetailsInput(e.target.value)}
+                            placeholder="e.g., 2+ years React experience, built a Hospital Management System, passionate about optimization..."
+                            rows={2}
+                            className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                            disabled={presetLoading}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneratePreset()}
+                          disabled={presetLoading}
+                          className="w-full bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-lg shadow-blue-500/10 transition-all duration-200"
+                        >
+                          {presetLoading ? (
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5" />
+                          )}
+                          {presetLoading ? 'Generating Custom Preset...' : 'Generate Preset with AI'}
+                        </button>
+                      </div>
+
+                      {/* Quick suggestions list */}
+                      <div>
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Or Choose a Standard Role</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            'MERN Stack Developer',
+                            'Java Developer',
+                            'Python Developer',
+                            'Frontend Engineer',
+                            'Backend Engineer',
+                            'DevOps Engineer',
+                            'Data Scientist',
+                            'Full Stack Developer'
+                          ].map(role => (
+                            <button
+                              key={role}
+                              type="button"
+                              onClick={() => handleGeneratePreset(role)}
+                              disabled={presetLoading}
+                              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 text-[10px] font-semibold rounded-lg transition"
+                            >
+                              {role}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -510,8 +903,68 @@ const ResumeBuilder = () => {
 
                 {/* ═══════ SKILLS ═══════ */}
                 {currentStep.id === 'skills' && (
-                  <div className="space-y-5">
-                    <p className="text-xs text-slate-500">Enter comma-separated values (e.g. React.js, Node.js, MongoDB)</p>
+                  <div className="space-y-6">
+                    {/* AI Custom Skills Optimizer */}
+                    <div className="bg-slate-955/40 border border-slate-800 rounded-xl p-5 mb-4 backdrop-blur-sm">
+                      <p className="text-xs font-bold text-slate-350 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4 text-violet-400 animate-pulse" />
+                        AI Skills Optimizer & Improver
+                      </p>
+                      <p className="text-[11px] text-slate-450 mb-4 leading-relaxed">
+                        Provide a custom prompt (e.g. your targeted stack, role, or specific requirements) to automatically generate, structure, and refine your technical skills. Any existing skills will be merged and optimized.
+                      </p>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <textarea
+                            value={skillsContextInput}
+                            onChange={e => setSkillsContextInput(e.target.value)}
+                            placeholder="e.g., I want to focus on microservices, add Docker/Kubernetes, and align with a senior backend profile..."
+                            rows={3}
+                            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none transition-all"
+                            disabled={skillsAiLoading}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleGenerateSkills}
+                          disabled={skillsAiLoading}
+                          className="w-full bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-lg shadow-blue-500/10 transition-all duration-200"
+                        >
+                          {skillsAiLoading ? (
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5" />
+                          )}
+                          {skillsAiLoading ? 'Optimizing Skills...' : 'Generate & Optimize Skills with AI'}
+                        </button>
+                      </div>
+
+                      {/* Quick suggestions */}
+                      <div className="mt-4 pt-3 border-t border-slate-800/80">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Try these quick prompt templates:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            'Optimize for a Senior React Engineer role',
+                            'Add modern Data Science and Machine Learning libraries',
+                            'Include cloud architecture, AWS services, and DevOps tools',
+                            'Focus on backend microservices with Go and gRPC'
+                          ].map(suggestion => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => setSkillsContextInput(suggestion)}
+                              disabled={skillsAiLoading}
+                              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-slate-200 text-[10px] font-semibold rounded-lg transition text-left"
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-500 border-t border-slate-800/80 pt-4">Enter comma-separated values (e.g. React.js, Node.js, MongoDB)</p>
                     {[
                       { label: 'Programming Languages', field: 'skills.programmingLanguages', placeholder: 'JavaScript, Python, C++, Java' },
                       { label: 'Frontend Technologies', field: 'skills.frontend', placeholder: 'React.js, Tailwind CSS, HTML5, CSS3' },
@@ -523,6 +976,7 @@ const ResumeBuilder = () => {
                       <div key={s.field}>
                         <label className={labelCls}>{s.label}</label>
                         <input
+                          key={`${s.field}-${presetVersion}`}
                           type="text"
                           defaultValue={formValues.skills?.[s.field.split('.')[1]]?.join(', ')}
                           onChange={e => setValue(s.field, e.target.value.split(',').map(v => v.trim()).filter(Boolean))}
@@ -540,7 +994,7 @@ const ResumeBuilder = () => {
                     <div className="flex justify-end">
                       <button
                         type="button"
-                        onClick={() => appendEdu({ degree:'', college:'', university:'', startDate:'', endDate:'', score:'', isPursuing: false })}
+                        onClick={() => appendEdu({ degree:'', college:'', university:'', startDate:'', endDate:'', expectedGraduation:'', score:'', isPursuing: false })}
                         className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition"
                       >
                         <Plus className="h-4 w-4" /> Add Education
@@ -585,7 +1039,12 @@ const ResumeBuilder = () => {
                             <label className={labelCls}>Start Date</label>
                             <input {...register(`education.${idx}.startDate`)} className={inputCls} placeholder="July 2022" />
                           </div>
-                          {!formValues.education?.[idx]?.isPursuing && (
+                          {formValues.education?.[idx]?.isPursuing ? (
+                            <div>
+                              <label className={labelCls}>Expected Graduation Date</label>
+                              <input {...register(`education.${idx}.expectedGraduation`)} className={inputCls} placeholder="June 2026" />
+                            </div>
+                          ) : (
                             <div>
                               <label className={labelCls}>End Date</label>
                               <input {...register(`education.${idx}.endDate`)} className={inputCls} placeholder="June 2026" />
@@ -629,11 +1088,48 @@ const ResumeBuilder = () => {
                             <div className="md:col-span-2">
                               <label className={labelCls}>Key Responsibilities (One per line)</label>
                               <textarea
+                                key={`intern-resp-${idx}-${presetVersion}`}
                                 defaultValue={formValues.internships?.[idx]?.responsibilities?.join('\n')}
                                 onChange={e => setValue(`internships.${idx}.responsibilities`, e.target.value.split('\n').filter(Boolean))}
                                 rows={3} className={inputCls + ' resize-none'}
                                 placeholder={"Developed core billing engines\nHandled API integrations\nFixed 20+ bugs"}
                               />
+
+                              {/* AI Experience Bullets Generator */}
+                              <div className="mt-3 bg-slate-950/40 border border-slate-800 rounded-xl p-3 backdrop-blur-sm">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
+                                  <span className="text-[10px] font-bold text-slate-355 uppercase tracking-wider">AI Experience Bullet Generator</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="text" 
+                                    id={`ai-internships-prompt-${idx}`}
+                                    placeholder="Describe what you did (e.g. built a React Native reseller app, fixed interface bugs)..."
+                                    className="flex-grow px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-505 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    disabled={experienceAiLoading.type === 'internships' && experienceAiLoading.index === idx}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleGenerateBullets('internships', idx);
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGenerateBullets('internships', idx)}
+                                    disabled={experienceAiLoading.type === 'internships' && experienceAiLoading.index === idx}
+                                    className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-550 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                  >
+                                    {experienceAiLoading.type === 'internships' && experienceAiLoading.index === idx ? (
+                                      <RefreshCw className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Sparkles className="h-3 w-3" />
+                                    )}
+                                    Generate
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -669,11 +1165,48 @@ const ResumeBuilder = () => {
                             <div className="md:col-span-2">
                               <label className={labelCls}>Role Description (One per line)</label>
                               <textarea
+                                key={`exp-desc-${idx}-${presetVersion}`}
                                 defaultValue={formValues.experience?.[idx]?.description?.join('\n')}
                                 onChange={e => setValue(`experience.${idx}.description`, e.target.value.split('\n').filter(Boolean))}
                                 rows={3} className={inputCls + ' resize-none'}
                                 placeholder={"Led a team of 5 engineers\nBuilt scalable REST APIs\nImproved performance by 40%"}
                               />
+
+                              {/* AI Experience Bullets Generator */}
+                              <div className="mt-3 bg-slate-955/40 border border-slate-800 rounded-xl p-3 backdrop-blur-sm">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
+                                  <span className="text-[10px] font-bold text-slate-355 uppercase tracking-wider">AI Experience Bullet Generator</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="text" 
+                                    id={`ai-experience-prompt-${idx}`}
+                                    placeholder="Describe what you did (e.g. designed scalable billing microservices, led 3 developers)..."
+                                    className="flex-grow px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-505 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    disabled={experienceAiLoading.type === 'experience' && experienceAiLoading.index === idx}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleGenerateBullets('experience', idx);
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGenerateBullets('experience', idx)}
+                                    disabled={experienceAiLoading.type === 'experience' && experienceAiLoading.index === idx}
+                                    className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-555 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                  >
+                                    {experienceAiLoading.type === 'experience' && experienceAiLoading.index === idx ? (
+                                      <RefreshCw className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Sparkles className="h-3 w-3" />
+                                    )}
+                                    Generate
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -720,11 +1253,48 @@ const ResumeBuilder = () => {
                           <div className="md:col-span-2">
                             <label className={labelCls}>Project Bullets (One per line)</label>
                             <textarea
+                              key={`proj-desc-${idx}-${presetVersion}`}
                               defaultValue={formValues.projects?.[idx]?.description?.join('\n')}
                               onChange={e => setValue(`projects.${idx}.description`, e.target.value.split('\n').filter(Boolean))}
                               rows={3} className={inputCls + ' resize-none'}
                               placeholder={"Built responsive UI with React.js\nReduced query time by 35%\nDeployed on AWS EC2"}
                             />
+
+                            {/* AI Experience Bullets Generator */}
+                            <div className="mt-3 bg-slate-950/40 border border-slate-800 rounded-xl p-3 backdrop-blur-sm">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
+                                <span className="text-[10px] font-bold text-slate-355 uppercase tracking-wider">AI Project Bullet Generator</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <input 
+                                  type="text" 
+                                  id={`ai-projects-prompt-${idx}`}
+                                  placeholder="Describe your project (e.g. built a live bidding chat system with WebRTC and Socket.io)..."
+                                  className="flex-grow px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-505 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  disabled={experienceAiLoading.type === 'projects' && experienceAiLoading.index === idx}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleGenerateBullets('projects', idx);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerateBullets('projects', idx)}
+                                  disabled={experienceAiLoading.type === 'projects' && experienceAiLoading.index === idx}
+                                  className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-550 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                >
+                                  {experienceAiLoading.type === 'projects' && experienceAiLoading.index === idx ? (
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                  Generate
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -899,21 +1469,22 @@ const ResumeBuilder = () => {
                 {/* Preview body */}
                 <div 
                   ref={previewWrapRef}
-                  className="bg-slate-950 p-4 overflow-auto max-h-[75vh] flex justify-center items-start"
+                  className="bg-slate-950 p-4 pb-32 overflow-auto max-h-[75vh] flex justify-center items-start w-full"
                 >
                   <div
                     style={{
                       width: `${A4_W * previewScale}px`,
-                      height: `${A4_H * previewScale}px`,
+                      height: `${sheetHeight * previewScale}px`,
                       position: 'relative',
                       flexShrink: 0
                     }}
                   >
                     <div
-                      className="resume-preview-card resume-container"
+                      ref={sheetRef}
+                      className="resume-preview-sheet"
                       style={{
                         width: `${A4_W}px`,
-                        height: `${A4_H}px`,
+                        minHeight: `${A4_H}px`,
                         transform: `scale(${previewScale})`,
                         transformOrigin: 'top left',
                         position: 'absolute',

@@ -394,8 +394,7 @@ const TemplateSelect = () => {
               {/* A4 Canvas Container */}
               <div
                 ref={previewWrapRef}
-                className="bg-slate-950/65 flex justify-center items-start overflow-auto p-6 relative flex-grow"
-                style={{ height: '480px', minHeight: '480px' }}
+                className="bg-slate-950/65 flex justify-center items-start overflow-auto p-4 sm:p-6 relative flex-grow h-[320px] sm:h-[480px] min-h-[320px] sm:min-h-[480px] w-full"
               >
                 {/* Scale Container wrapping the A4 Sheet to eliminate layout overflows */}
                 <div
@@ -420,6 +419,7 @@ const TemplateSelect = () => {
                       padding: '56px 64px',
                       boxShadow: '0 12px 35px rgba(0,0,0,0.6)',
                       borderRadius: '6px',
+                      overflow: 'hidden',
                     }}
                   >
                     <PreviewComponent

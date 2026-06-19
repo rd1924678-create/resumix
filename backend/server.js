@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const authRoutes = require('./src/routes/authRoutes');
 const resumeRoutes = require('./src/routes/resumeRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
+const atsRoutes = require('./src/routes/atsRoutes');
 
 // Connect to Database
 connectDB();
@@ -17,7 +18,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: '*', // In production, replace with your frontend URL
+  origin: true, // Dynamically reflects request origin, required when credentials is true
   credentials: true,
 }));
 app.use(express.json());
@@ -47,6 +48,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/ats', atsRoutes);
 
 // Error Middleware
 app.use(errorHandler);

@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { getTemplateComponent } from '../templates/ResumeTemplates';
 import { MOCK_RESUME_DATA } from '../utils/mockData';
+import { atsService } from '../services/api';
 
 const templatesList = [
   { id: "classic", name: "Classic Professional", badge: "Most Popular", color: "blue", desc: "Traditional standard look, ideal for BCA/MCA general roles.", tag: "General IT" },
@@ -25,9 +26,9 @@ const steps = [
 
 const features = [
   { icon: Shield, title: "100% ATS Compliant", desc: "All templates are tested against major ATS parsers used by top tech recruiters.", color: "blue" },
-  { icon: Zap, title: "Real-Time Scoring", desc: "Live ATS score checker updates as you type so you always know your resume's strength.", color: "violet" },
-  { icon: Target, title: "Smart Role Presets", desc: "One-click presets for MERN, Java, Python, DevOps, and 10+ developer roles.", color: "emerald" },
-  { icon: TrendingUp, title: "Live Preview", desc: "See exactly how your resume will look as a PDF while editing — no surprises.", color: "amber" },
+  { icon: Zap, title: "AI-Powered Live Scoring", desc: "Real-time AI ATS auditor checks structure, keywords, and spelling to rate your match score.", color: "violet" },
+  { icon: Target, title: "AI Role Presets", desc: "One-click AI presets generate summaries and skill matrices for MERN, Java, DevOps, and more.", color: "emerald" },
+  { icon: TrendingUp, title: "Dynamic Scale Preview", desc: "Live A4 document preview scales smoothly to fit any desktop, tablet, or mobile viewport without clipping.", color: "amber" },
   { icon: Lock, title: "Template Locked Flow", desc: "Choose your template once. The wizard keeps you focused on content, not formatting.", color: "rose" },
   { icon: BarChart3, title: "Section Reordering", desc: "Drag and drop resume sections to match what recruiters in your target role want to see first.", color: "cyan" },
 ];
@@ -74,12 +75,50 @@ const LandingPage = () => {
   const A4_W = 794;
   const A4_H = 1123;
 
+  const [stats, setStats] = useState({
+    developersHelped: '10,000+',
+    resumesCreated: '25,000+',
+    atsPassRate: '98%',
+    avgBuildTime: '< 5m',
+    userRating: '4.9/5'
+  });
+
+  useEffect(() => {
+    let active = true;
+    const fetchStats = async () => {
+      try {
+        const response = await atsService.getPublicStats();
+        if (active && response.data && response.data.success) {
+          const { developersHelped, resumesCreated, atsPassRate, avgBuildTime, userRating } = response.data.data;
+          const formatNum = (num) => typeof num === 'number' ? num.toLocaleString() : num;
+          setStats({
+            developersHelped: `${formatNum(developersHelped)}+`,
+            resumesCreated: `${formatNum(resumesCreated)}+`,
+            atsPassRate,
+            avgBuildTime,
+            userRating
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load public stats:', err);
+      }
+    };
+    fetchStats();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     const el = previewWrapRef.current;
     if (!el) return;
     const calc = () => {
-      const containerW = el.offsetWidth;
-      const scale = (containerW - 32) / A4_W;
+      const parentEl = el.parentElement;
+      const containerW = parentEl ? parentEl.offsetWidth : el.offsetWidth;
+      const isMobile = window.innerWidth < 640;
+      const parentPad = isMobile ? 40 : 64; // p-5 vs p-8
+      const innerPad = 48; // p-6
+      const scale = (containerW - parentPad - innerPad) / A4_W;
       setFitScale(Math.min(1.0, scale));
     };
     calc();
@@ -102,16 +141,16 @@ const LandingPage = () => {
       <div className="fixed bottom-0 left-0 w-[400px] h-[400px] bg-indigo-600/6 rounded-full blur-[100px] pointer-events-none z-0" />
 
       {/* ─────────────────────── HERO ─────────────────────── */}
-      <section className="relative pt-20 pb-28 sm:pt-32 sm:pb-40 px-4 max-w-7xl mx-auto w-full z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+      <section className="relative pt-12 pb-16 sm:pt-32 sm:pb-40 px-4 max-w-7xl mx-auto w-full z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center">
           {/* Left copy */}
-          <div className="lg:col-span-6 flex flex-col items-start">
+          <div className="lg:col-span-6 flex flex-col items-center text-center lg:items-start lg:text-left">
             <div className="inline-flex items-center gap-2 bg-blue-950/60 border border-blue-800/50 rounded-full px-4 py-1.5 text-xs font-semibold text-blue-300 mb-6 shadow-lg shadow-blue-900/20">
               <Zap className="h-3.5 w-3.5 text-blue-400 animate-pulse" />
-              Trusted by 10,000+ developers in India
+              AI-Powered ATS Builder • Trusted by 10,000+ developers
             </div>
 
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.05]">
+            <h1 className="text-3xl sm:text-5xl lg:text-7xl font-black tracking-tight text-white leading-[1.08]">
               Land More<br />
               Interviews<br />
               <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-indigo-300 bg-clip-text text-transparent">
@@ -120,7 +159,7 @@ const LandingPage = () => {
             </h1>
 
             <p className="mt-6 text-base sm:text-lg text-slate-400 max-w-lg leading-relaxed">
-              Build ATS-optimized developer resumes in minutes — no design skills needed. Our guided wizard handles the formatting. You focus on the content.
+              Build ATS-optimized developer resumes in minutes — fully mobile-responsive with AI-powered suggestions, auto-scaled templates, and smart role presets.
             </p>
 
             <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
@@ -140,14 +179,14 @@ const LandingPage = () => {
             </div>
 
             {/* Social proof micro-stats */}
-            <div className="mt-12 pt-8 border-t border-slate-900 w-full grid grid-cols-3 gap-6">
+            <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-900 w-full grid grid-cols-3 gap-3 sm:gap-6">
               {[
-                { val: "98%", label: "ATS Pass Rate" },
-                { val: "10k+", label: "Resumes Built" },
-                { val: "< 5m", label: "Avg. Build Time" },
+                { val: stats.atsPassRate, label: "ATS Pass Rate" },
+                { val: stats.resumesCreated, label: "Resumes Built" },
+                { val: stats.avgBuildTime, label: "Avg. Build Time" },
               ].map(s => (
                 <div key={s.label}>
-                  <span className="block text-2xl sm:text-3xl font-black text-white">{s.val}</span>
+                  <span className="block text-lg sm:text-3xl font-black text-white">{s.val}</span>
                   <span className="text-xs text-slate-500 font-medium mt-0.5 block">{s.label}</span>
                 </div>
               ))}
@@ -155,7 +194,7 @@ const LandingPage = () => {
           </div>
 
           {/* Right — floating resume mockup */}
-          <div className="lg:col-span-6 relative flex justify-center items-center">
+          <div className="lg:col-span-6 relative flex justify-center items-center hidden sm:flex">
             <div className="absolute w-80 h-80 bg-blue-500/10 rounded-full blur-3xl -z-10 animate-pulse-slow" />
 
             <div className="relative w-full max-w-sm sm:max-w-md">
@@ -209,7 +248,7 @@ const LandingPage = () => {
                 </div>
 
                 {/* Floating ATS badge */}
-                <div className="absolute -top-5 -right-5 bg-slate-950/95 border border-slate-700 rounded-xl p-3 shadow-xl flex items-center gap-3 backdrop-blur-md animate-bounce-slow">
+                <div className="absolute -top-5 -right-5 bg-slate-950/95 border border-slate-700 rounded-xl p-3 shadow-xl hidden sm:flex items-center gap-3 backdrop-blur-md animate-bounce-slow">
                   <div className="relative flex items-center justify-center">
                     <svg className="w-11 h-11 -rotate-90">
                       <circle cx="22" cy="22" r="18" stroke="currentColor" className="text-slate-800" strokeWidth="3.5" fill="transparent" />
@@ -226,7 +265,7 @@ const LandingPage = () => {
                 </div>
 
                 {/* Floating skill audit badge */}
-                <div className="absolute -bottom-4 -left-5 bg-slate-950/95 border border-slate-700 rounded-xl p-3 shadow-lg flex items-center gap-2.5 max-w-[175px] backdrop-blur-md">
+                <div className="absolute -bottom-4 -left-5 bg-slate-950/95 border border-slate-700 rounded-xl p-3 shadow-lg hidden sm:flex items-center gap-2.5 max-w-[175px] backdrop-blur-md">
                   <div className="h-7 w-7 rounded-lg bg-violet-900/50 flex items-center justify-center flex-shrink-0 border border-violet-800/40">
                     <Sparkles className="h-4 w-4 text-violet-400" />
                   </div>
@@ -379,7 +418,7 @@ const LandingPage = () => {
           </div>
 
           {/* Template selector tabs */}
-          <div className="flex flex-wrap gap-3 justify-center mb-10">
+          <div className="flex gap-3 justify-start sm:justify-center mb-10 scroll-x-mobile pb-2">
             {templatesList.map((tmpl) => {
               const c = colorMap[tmpl.color];
               const isActive = selectedTemplate === tmpl.id;
@@ -426,7 +465,7 @@ const LandingPage = () => {
 
             <div 
               ref={previewWrapRef}
-              className="bg-slate-950/40 p-6 rounded-2xl flex justify-center items-start overflow-hidden border border-slate-900"
+              className="bg-slate-950/40 p-6 rounded-2xl flex justify-center items-start overflow-hidden border border-slate-900 w-full"
             >
               <div
                 style={{
@@ -438,7 +477,7 @@ const LandingPage = () => {
                 }}
               >
                 <div
-                  className="resume-preview-card resume-container"
+                  className="resume-preview-sheet"
                   style={{
                     width: `${A4_W}px`,
                     height: `${A4_H}px`,
@@ -453,6 +492,7 @@ const LandingPage = () => {
                     boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
                     padding: '56px 64px',
                     pointerEvents: 'none',
+                    overflow: 'hidden',
                   }}
                 >
                   <PreviewComponent data={MOCK_RESUME_DATA} />
@@ -468,10 +508,10 @@ const LandingPage = () => {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { icon: Users, val: "10,000+", label: "Developers Helped", color: "blue" },
-              { icon: FileText, val: "25,000+", label: "Resumes Created", color: "violet" },
-              { icon: Award, val: "98%", label: "ATS Pass Rate", color: "emerald" },
-              { icon: Star, val: "4.9/5", label: "User Rating", color: "amber" },
+              { icon: Users, val: stats.developersHelped, label: "Developers Helped", color: "blue" },
+              { icon: FileText, val: stats.resumesCreated, label: "Resumes Created", color: "violet" },
+              { icon: Award, val: stats.atsPassRate, label: "ATS Pass Rate", color: "emerald" },
+              { icon: Star, val: stats.userRating, label: "User Rating", color: "amber" },
             ].map(s => {
               const Icon = s.icon;
               const c = colorMap[s.color];
@@ -512,9 +552,9 @@ const LandingPage = () => {
       </section>
 
       {/* ─────────────────────── FINAL CTA ─────────────────────── */}
-      <section className="relative py-24 z-10 border-t border-slate-900">
+      <section className="relative py-16 sm:py-24 z-10 border-t border-slate-900">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="bg-gradient-to-br from-blue-950/60 to-violet-950/60 border border-blue-800/40 rounded-3xl p-12 sm:p-16 relative overflow-hidden">
+            <div className="bg-gradient-to-br from-blue-950/60 to-violet-950/60 border border-blue-800/40 rounded-2xl sm:rounded-3xl p-6 sm:p-16 relative overflow-hidden">
             <div className="absolute inset-0 bg-grid-white opacity-50 pointer-events-none" />
             <div className="absolute -top-16 -right-16 w-64 h-64 bg-blue-600/15 rounded-full blur-3xl" />
             <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-violet-600/15 rounded-full blur-3xl" />
@@ -523,7 +563,7 @@ const LandingPage = () => {
               <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-xs font-semibold text-blue-200 mb-6">
                 <Sparkles className="h-3.5 w-3.5" /> Free to use. No credit card required.
               </div>
-              <h2 className="text-4xl sm:text-6xl font-black text-white leading-tight">
+              <h2 className="text-2xl sm:text-4xl lg:text-6xl font-black text-white leading-tight">
                 Your Next Interview<br />Starts Here.
               </h2>
               <p className="text-blue-200/80 mt-5 max-w-lg mx-auto text-base">

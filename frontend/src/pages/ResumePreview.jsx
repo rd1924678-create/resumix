@@ -15,11 +15,27 @@ const ResumePreview = () => {
   const [isDownloading, setIsDownloading] = useState(false);
 
   const [previewScale, setPreviewScale] = useState(1);
+  const [sheetHeight, setSheetHeight] = useState(1123);
   const containerRef = useRef(null);
+  const sheetRef = useRef(null);
 
   // A4 dimensions (standard 96dpi)
   const A4_W = 794;
   const A4_H = 1123;
+
+  // Measure dynamic sheet height to prevent clipping
+  useEffect(() => {
+    if (!loading && sheetRef.current) {
+      const ro = new ResizeObserver(() => {
+        if (sheetRef.current) {
+          const newHeight = sheetRef.current.offsetHeight || 1123;
+          setSheetHeight(prev => Math.abs(prev - newHeight) > 2 ? newHeight : prev);
+        }
+      });
+      ro.observe(sheetRef.current);
+      return () => ro.disconnect();
+    }
+  }, [loading, resume]);
 
   useEffect(() => {
     const fetchResume = async () => {
@@ -43,7 +59,8 @@ const ResumePreview = () => {
     const el = containerRef.current;
     if (!el) return;
     const calc = () => {
-      const containerW = el.offsetWidth;
+      const parentEl = el.parentElement;
+      const containerW = parentEl ? parentEl.offsetWidth : el.offsetWidth;
       // Add slight spacing padding for smaller viewports
       if (containerW < 840) {
         setPreviewScale((containerW - 32) / A4_W);
@@ -64,9 +81,8 @@ const ResumePreview = () => {
       return;
     }
 
-    const toastId = toast.loading('Generating & exporting PDF...');
+    const toastId = toast.loading('Generating & exporting text-selectable PDF...');
     setIsDownloading(true);
-    element.classList.add('generating-pdf');
 
     try {
       await resumeService.recordDownload(id);
@@ -74,35 +90,71 @@ const ResumePreview = () => {
       console.error('Error logging download count', err);
     }
 
-    const opt = {
-      margin:       0,
-      filename:     `${resume?.title || 'Resume'}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { 
-        scale: 2, 
-        useCORS: true, 
-        letterRendering: true,
-        backgroundColor: '#ffffff'
-      },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-    };
+    try {
+      // Gather all styles and links and make paths absolute
+      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+        .map(el => {
+          if (el.tagName === 'LINK' && el.getAttribute('href')?.startsWith('/')) {
+            const clone = el.cloneNode();
+            clone.setAttribute('href', window.location.origin + el.getAttribute('href'));
+            return clone.outerHTML;
+          }
+          return el.outerHTML;
+        })
+        .join('\n');
 
-    html2pdf()
-      .from(element)
-      .set(opt)
-      .save()
-      .then(() => {
-        element.classList.remove('generating-pdf');
-        setIsDownloading(false);
-        toast.success('PDF exported and downloaded!', { id: toastId });
-      })
-      .catch((err) => {
-        element.classList.remove('generating-pdf');
-        setIsDownloading(false);
-        console.error('PDF export error:', err);
-        toast.error('Failed to export PDF', { id: toastId });
-      });
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            ${styles}
+             <style>
+              @page {
+                size: A4 portrait;
+                margin: 12mm 15mm !important;
+              }
+              body { background: white !important; color: black !important; margin: 0 !important; padding: 0 !important; }
+              .resume-preview-card { 
+                box-shadow: none !important; 
+                border: none !important; 
+                transform: none !important; 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                width: 100% !important; 
+                min-height: 0 !important;
+                background: transparent !important;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="resume-preview-card">
+              ${element.innerHTML}
+            </div>
+          </body>
+        </html>
+      `;
+
+      const response = await resumeService.downloadPdf(id, fullHtml);
+
+      // Create a blob from the response and trigger download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${resume?.title || resume?.personalInfo?.fullName || 'Resume'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      toast.success('PDF downloaded successfully!', { id: toastId });
+    } catch (err) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to export PDF. Please try again.', { id: toastId });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (loading) {
@@ -172,7 +224,7 @@ const ResumePreview = () => {
       </div>
 
       {/* ── A4 Resume Sheet Viewport ── */}
-      <div className="flex-grow flex justify-center items-start overflow-y-auto py-10 px-4">
+      <div className="flex-grow flex justify-center items-start overflow-y-auto pt-10 pb-40 px-4">
         <div
           ref={containerRef}
           className="w-full flex justify-center items-start"
@@ -181,17 +233,18 @@ const ResumePreview = () => {
           <div
             style={{
               width: `${A4_W * previewScale}px`,
-              height: `${A4_H * previewScale}px`,
+              height: `${sheetHeight * previewScale}px`,
               position: 'relative',
               flexShrink: 0,
             }}
           >
             <div
               id="resume-to-pdf"
-              className="resume-preview-card resume-container"
+              ref={sheetRef}
+              className="resume-preview-sheet"
               style={{
                 width: `${A4_W}px`,
-                height: `${A4_H}px`,
+                minHeight: `${A4_H}px`,
                 transform: `scale(${previewScale})`,
                 transformOrigin: 'top left',
                 position: 'absolute',
@@ -201,6 +254,7 @@ const ResumePreview = () => {
                 backgroundColor: 'white',
                 borderRadius: '4px',
                 boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                padding: '56px 64px',
               }}
             >
               <TemplateComponent data={resume} />

@@ -7,6 +7,7 @@ const {
   updateResume,
   deleteResume,
   recordDownload,
+  generatePdf,
 } = require('../controllers/resumeController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -23,5 +24,6 @@ router.route('/:id')
   .delete(deleteResume);
 
 router.post('/:id/download', recordDownload);
+router.post('/:id/pdf', generatePdf);
 
 module.exports = router;

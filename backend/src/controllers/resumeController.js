@@ -234,6 +234,50 @@ const recordDownload = async (req, res, next) => {
   }
 };
 
+// @desc    Generate a proper text-based PDF using Puppeteer
+// @route   POST /api/resumes/:id/pdf
+// @access  Private
+const generatePdf = async (req, res, next) => {
+  try {
+    const { html } = req.body;
+    if (!html) {
+      res.status(400);
+      throw new Error('HTML content is required');
+    }
+
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+    
+    // Set HTML content and wait for styling/images to load
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    // Print to PDF with exact A4 dimensions
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '0px',
+        right: '0px',
+        bottom: '0px',
+        left: '0px'
+      }
+    });
+
+    await browser.close();
+
+    res.contentType('application/pdf');
+    res.send(Buffer.from(pdfBuffer));
+  } catch (error) {
+    console.error('PDF Generation Error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getResumes,
   getResumeById,
@@ -241,5 +285,6 @@ module.exports = {
   updateResume,
   deleteResume,
   recordDownload,
+  generatePdf,
   calculateAtsScore, // export for testing or other pages
 };

@@ -16,6 +16,7 @@ import ResumeBuilder from './pages/ResumeBuilder';
 import ResumePreview from './pages/ResumePreview';
 import AdminDashboard from './pages/AdminDashboard';
 import TemplateSelect from './pages/TemplateSelect';
+import ATSScorer from './pages/ATSScorer';
 
 // Protect standard user routes
 const ProtectedRoute = ({ children }) => {
@@ -81,6 +82,7 @@ const App = () => {
 
           {/* Public routes with shell */}
           <Route path="/" element={<MainLayout><LandingPage /></MainLayout>} />
+          <Route path="/ats-scorer" element={<MainLayout><ATSScorer /></MainLayout>} />
 
           {/* Protected user routes */}
           <Route path="/dashboard" element={

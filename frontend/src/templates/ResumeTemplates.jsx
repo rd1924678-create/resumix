@@ -197,7 +197,7 @@ export const ClassicProfessional = ({ data }) => {
               </div>
               <div className="text-right">
                 <span className="block text-slate-600 text-xs">
-                  {edu.startDate} - {edu.isPursuing ? 'Pursuing' : edu.endDate}
+                  {edu.startDate} - {edu.isPursuing ? (edu.expectedGraduation ? `Expected ${edu.expectedGraduation}` : 'Pursuing') : edu.endDate}
                 </span>
                 {!edu.isPursuing && edu.score && (
                   <span className="block font-semibold text-xs text-slate-800">Score: {edu.score}</span>
@@ -398,7 +398,7 @@ export const SoftwareEngineerATS = ({ data }) => {
                 <strong className="text-slate-950">{edu.degree}</strong> – {edu.college} {edu.university && `(${edu.university})`}
               </div>
               <div className="text-right text-xs text-slate-600">
-                <span>{edu.startDate} - {edu.isPursuing ? 'Pursuing' : edu.endDate}</span>
+                <span>{edu.startDate} - {edu.isPursuing ? (edu.expectedGraduation ? `Expected ${edu.expectedGraduation}` : 'Pursuing') : edu.endDate}</span>
                 {!edu.isPursuing && edu.score && <span className="block font-semibold text-slate-800">CGPA/Percentage: {edu.score}</span>}
               </div>
             </div>
@@ -495,7 +495,7 @@ export const FreshGraduateATS = ({ data }) => {
             <div key={idx} className="text-slate-800">
               <div className="flex justify-between font-bold text-slate-950">
                 <span>{edu.degree}</span>
-                <span className="font-normal text-slate-600 text-xs">{edu.startDate} – {edu.isPursuing ? 'Pursuing' : edu.endDate}</span>
+                <span className="font-normal text-slate-600 text-xs">{edu.startDate} – {edu.isPursuing ? (edu.expectedGraduation ? `Expected ${edu.expectedGraduation}` : 'Pursuing') : edu.endDate}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-700 mt-0.5">
                 <span>{edu.college} {edu.university && `| ${edu.university}`}</span>
@@ -698,7 +698,7 @@ export const ModernMinimalATS = ({ data }) => {
               <div className="flex justify-between text-slate-950 font-bold">
                 <span>{edu.degree}</span>
                 <span className="text-slate-600 text-xs font-sans font-normal">
-                  {edu.startDate} - {edu.isPursuing ? 'Pursuing' : edu.endDate}
+                  {edu.startDate} - {edu.isPursuing ? (edu.expectedGraduation ? `Expected ${edu.expectedGraduation}` : 'Pursuing') : edu.endDate}
                 </span>
               </div>
               <p className="text-slate-700 text-xs mt-0.5 font-sans">
@@ -824,7 +824,7 @@ export const ITProfessionalATS = ({ data }) => {
                 <strong>{edu.degree}</strong> – {edu.college}
               </div>
               <span className="text-slate-600 text-xs">
-                {edu.startDate} - {edu.isPursuing ? 'Pursuing' : edu.endDate}
+                {edu.startDate} - {edu.isPursuing ? (edu.expectedGraduation ? `Expected ${edu.expectedGraduation}` : 'Pursuing') : edu.endDate}
                 {!edu.isPursuing && edu.score && ` (Score: ${edu.score})`}
               </span>
             </div>

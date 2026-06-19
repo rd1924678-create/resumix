@@ -105,7 +105,7 @@ const Login = () => {
       </div>
 
       {/* Left Pane - Form Panel */}
-      <div className="w-full md:w-[45%] flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16 z-10 bg-slate-950 relative border-r border-slate-900/50">
+      <div className="w-full md:w-[45%] flex flex-col justify-center px-4 py-8 sm:px-12 sm:py-12 lg:px-16 z-10 bg-slate-950 relative border-r border-slate-900/50">
         <div className="absolute inset-0 bg-grid-white opacity-20 pointer-events-none" />
         <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-600/5 rounded-full blur-3xl pointer-events-none" />
         

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get API URL securely from environment variables
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -42,6 +42,7 @@ export const resumeService = {
   update: (id, data) => api.put(`/api/resumes/${id}`, data),
   delete: (id) => api.delete(`/api/resumes/${id}`),
   recordDownload: (id) => api.post(`/api/resumes/${id}/download`),
+  downloadPdf: (id, html) => api.post(`/api/resumes/${id}/pdf`, { html }, { responseType: 'blob' }),
 };
 
 export const adminService = {
@@ -49,6 +50,19 @@ export const adminService = {
   getUsers: () => api.get('/api/admin/users'),
   deleteUser: (id) => api.delete(`/api/admin/users/${id}`),
   getResumes: () => api.get('/api/admin/resumes'),
+};
+
+export const atsService = {
+  scoreResume: (formData) => api.post('/api/ats/score', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  scoreBuilderResume: (resume) => api.post('/api/ats/score-builder', { resume }),
+  generateRolePreset: (role, customDetails) => api.post('/api/ats/preset', { role, customDetails }),
+  generateSkills: (context, currentSkills) => api.post('/api/ats/generate-skills', { context, currentSkills }),
+  generateExperienceBullets: (role, company, context, type = 'experience', extra = {}) => 
+    api.post('/api/ats/generate-bullets', { role, company, context, type, ...extra }),
+  chatResume: (resumeText, messages) => api.post('/api/ats/chat', { resumeText, messages }),
+  getPublicStats: () => api.get('/api/ats/public-stats'),
 };
 
 export default api;
