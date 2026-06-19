@@ -767,23 +767,17 @@ exports.getPublicStats = async (req, res, next) => {
     const totalUsers = await User.countDocuments({ role: 'user' });
     const totalResumes = await Resume.countDocuments();
     
-    // Average ATS pass rate calculation from database
-    const totalRatedResumes = await Resume.countDocuments({ atsScore: { $gt: 0 } });
-    const passedResumes = await Resume.countDocuments({ atsScore: { $gte: 70 } });
-    
-    let passRatePercent = 98;
-    if (totalRatedResumes > 0) {
-      passRatePercent = Math.round((passedResumes / totalRatedResumes) * 100);
-      if (passRatePercent < 85) {
-        passRatePercent = 85 + (passRatePercent % 15);
-      }
-    }
+    // Average ATS score calculation from database
+    const scoreResult = await Resume.aggregate([
+      { $group: { _id: null, avgScore: { $avg: "$atsScore" } } }
+    ]);
+    const passRatePercent = scoreResult.length > 0 ? Math.round(scoreResult[0].avgScore) : 0;
 
     res.status(200).json({
       success: true,
       data: {
-        developersHelped: 10000 + totalUsers,
-        resumesCreated: 25000 + totalResumes,
+        developersHelped: totalUsers,
+        resumesCreated: totalResumes,
         atsPassRate: `${passRatePercent}%`,
         avgBuildTime: "< 5m",
         userRating: "4.9/5"

@@ -90,10 +90,15 @@ const LandingPage = () => {
         const response = await atsService.getPublicStats();
         if (active && response.data && response.data.success) {
           const { developersHelped, resumesCreated, atsPassRate, avgBuildTime, userRating } = response.data.data;
-          const formatNum = (num) => typeof num === 'number' ? num.toLocaleString() : num;
+          const formatVal = (val) => {
+            if (typeof val === 'number') {
+              return val > 0 ? `${val.toLocaleString()}+` : '0';
+            }
+            return val;
+          };
           setStats({
-            developersHelped: `${formatNum(developersHelped)}+`,
-            resumesCreated: `${formatNum(resumesCreated)}+`,
+            developersHelped: formatVal(developersHelped),
+            resumesCreated: formatVal(resumesCreated),
             atsPassRate,
             avgBuildTime,
             userRating
@@ -181,7 +186,7 @@ const LandingPage = () => {
             {/* Social proof micro-stats */}
             <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-900 w-full grid grid-cols-3 gap-3 sm:gap-6">
               {[
-                { val: stats.atsPassRate, label: "ATS Pass Rate" },
+                { val: stats.atsPassRate, label: "Avg. ATS Score" },
                 { val: stats.resumesCreated, label: "Resumes Built" },
                 { val: stats.avgBuildTime, label: "Avg. Build Time" },
               ].map(s => (
@@ -510,7 +515,7 @@ const LandingPage = () => {
             {[
               { icon: Users, val: stats.developersHelped, label: "Developers Helped", color: "blue" },
               { icon: FileText, val: stats.resumesCreated, label: "Resumes Created", color: "violet" },
-              { icon: Award, val: stats.atsPassRate, label: "ATS Pass Rate", color: "emerald" },
+              { icon: Award, val: stats.atsPassRate, label: "Avg. ATS Score", color: "emerald" },
               { icon: Star, val: stats.userRating, label: "User Rating", color: "amber" },
             ].map(s => {
               const Icon = s.icon;
