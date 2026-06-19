@@ -1,0 +1,11 @@
+# Monorepo setup: Netlify will look inside the frontend directory
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# React Router SPA routing fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
