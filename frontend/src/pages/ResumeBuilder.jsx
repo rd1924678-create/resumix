@@ -752,7 +752,7 @@ const ResumeBuilder = () => {
             {/* ── ATS missing keywords ── */}
             {atsMissingKeywords.length > 0 && (
               <div className="bg-blue-950/20 border border-blue-900/30 rounded-2xl p-5 mb-5 no-print">
-                <span className="block text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-blue-400" />
                   Keywords to Add (Recommended)
                 </span>

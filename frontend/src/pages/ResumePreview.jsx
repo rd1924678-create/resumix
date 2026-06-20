@@ -91,16 +91,38 @@ const ResumePreview = () => {
     }
 
     try {
-      // Gather all styles and links and make paths absolute
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map(el => {
-          if (el.tagName === 'LINK' && el.getAttribute('href')?.startsWith('/')) {
-            const clone = el.cloneNode();
-            clone.setAttribute('href', window.location.origin + el.getAttribute('href'));
-            return clone.outerHTML;
+      // Gather all style contents and inline them to prevent the backend (which runs Puppeteer in a separate process/server) from failing to fetch stylesheets from localhost or relative paths.
+      const styleElements = document.querySelectorAll('style, link[rel="stylesheet"]');
+      const stylesArray = [];
+      for (const el of Array.from(styleElements)) {
+        if (el.tagName === 'STYLE') {
+          stylesArray.push(el.innerHTML);
+        } else if (el.tagName === 'LINK') {
+          try {
+            const href = el.getAttribute('href');
+            if (href) {
+              const absoluteHref = new URL(href, window.location.href).href;
+              const res = await fetch(absoluteHref);
+              if (res.ok) {
+                const cssText = await res.text();
+                stylesArray.push(cssText);
+              } else {
+                stylesArray.push(`<link rel="stylesheet" href="${absoluteHref}">`);
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to inline stylesheet:', e);
+            const href = el.getAttribute('href');
+            if (href) {
+              const absoluteHref = new URL(href, window.location.href).href;
+              stylesArray.push(`<link rel="stylesheet" href="${absoluteHref}">`);
+            }
           }
-          return el.outerHTML;
-        })
+        }
+      }
+
+      const styles = stylesArray
+        .map(css => (css.trim().startsWith('<') ? css : `<style>${css}</style>`))
         .join('\n');
 
       const fullHtml = `

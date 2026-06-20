@@ -199,7 +199,7 @@ const LandingPage = () => {
           </div>
 
           {/* Right — floating resume mockup */}
-          <div className="lg:col-span-6 relative flex justify-center items-center hidden sm:flex">
+          <div className="lg:col-span-6 relative hidden sm:flex justify-center items-center">
             <div className="absolute w-80 h-80 bg-blue-500/10 rounded-full blur-3xl -z-10 animate-pulse-slow" />
 
             <div className="relative w-full max-w-sm sm:max-w-md">
