@@ -1101,7 +1101,7 @@ const ResumeBuilder = () => {
                                   <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
                                   <span className="text-[10px] font-bold text-slate-355 uppercase tracking-wider">AI Experience Bullet Generator</span>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-col sm:flex-row gap-2">
                                   <input 
                                     type="text" 
                                     id={`ai-internships-prompt-${idx}`}
@@ -1119,7 +1119,7 @@ const ResumeBuilder = () => {
                                     type="button"
                                     onClick={() => handleGenerateBullets('internships', idx)}
                                     disabled={experienceAiLoading.type === 'internships' && experienceAiLoading.index === idx}
-                                    className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-550 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                    className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-550 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer shrink-0 w-full sm:w-auto"
                                   >
                                     {experienceAiLoading.type === 'internships' && experienceAiLoading.index === idx ? (
                                       <RefreshCw className="h-3 w-3 animate-spin" />
@@ -1178,7 +1178,7 @@ const ResumeBuilder = () => {
                                   <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
                                   <span className="text-[10px] font-bold text-slate-355 uppercase tracking-wider">AI Experience Bullet Generator</span>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-col sm:flex-row gap-2">
                                   <input 
                                     type="text" 
                                     id={`ai-experience-prompt-${idx}`}
@@ -1196,7 +1196,7 @@ const ResumeBuilder = () => {
                                     type="button"
                                     onClick={() => handleGenerateBullets('experience', idx)}
                                     disabled={experienceAiLoading.type === 'experience' && experienceAiLoading.index === idx}
-                                    className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-555 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                    className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-555 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer shrink-0 w-full sm:w-auto"
                                   >
                                     {experienceAiLoading.type === 'experience' && experienceAiLoading.index === idx ? (
                                       <RefreshCw className="h-3 w-3 animate-spin" />
@@ -1266,7 +1266,7 @@ const ResumeBuilder = () => {
                                 <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
                                 <span className="text-[10px] font-bold text-slate-355 uppercase tracking-wider">AI Project Bullet Generator</span>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex flex-col sm:flex-row gap-2">
                                 <input 
                                   type="text" 
                                   id={`ai-projects-prompt-${idx}`}
@@ -1284,7 +1284,7 @@ const ResumeBuilder = () => {
                                   type="button"
                                   onClick={() => handleGenerateBullets('projects', idx)}
                                   disabled={experienceAiLoading.type === 'projects' && experienceAiLoading.index === idx}
-                                  className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-550 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                  className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-550 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer shrink-0 w-full sm:w-auto"
                                 >
                                   {experienceAiLoading.type === 'projects' && experienceAiLoading.index === idx ? (
                                     <RefreshCw className="h-3 w-3 animate-spin" />
