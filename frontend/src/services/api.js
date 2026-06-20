@@ -61,7 +61,7 @@ export const atsService = {
   generateSkills: (context, currentSkills) => api.post('/api/ats/generate-skills', { context, currentSkills }),
   generateExperienceBullets: (role, company, context, type = 'experience', extra = {}) => 
     api.post('/api/ats/generate-bullets', { role, company, context, type, ...extra }),
-  chatResume: (resumeText, messages) => api.post('/api/ats/chat', { resumeText, messages }),
+  chatResume: (resumeText, messages, sector) => api.post('/api/ats/chat', { resumeText, messages, sector }),
   getPublicStats: () => api.get('/api/ats/public-stats'),
 };
 

@@ -87,8 +87,11 @@ exports.scoreResume = async (req, res, next) => {
     const sectionAnalysis = analyzeSections(resumeText);
     console.log('Section analysis:', sectionAnalysis);
 
+    // Read the target sector from request body
+    const sector = req.body.sector || 'IT & Software Engineering';
+
     // 3. Build the prompt — AI gets section context + full resume text, scores freely as an ATS expert
-    const prompt = `You are a professional ATS (Applicant Tracking System) evaluator specializing in IT and Software Engineering resumes.
+    const prompt = `You are a professional ATS (Applicant Tracking System) evaluator specializing in resumes for the "${sector}" field.
 Note: Today's date is ${new Date().toDateString()}.
 
 Our parser has extracted the following structural information from this resume:
@@ -98,20 +101,20 @@ ${sectionAnalysis}
 --- END ---
 
 Using the above structural context AND the full resume text below, evaluate this resume as a professional ATS system would.
-Score it based on your expert knowledge of what makes a strong IT/engineering resume.
+Score it based on your expert knowledge of what makes a strong resume in the "${sector}" field.
 
 Rules you must follow:
 - Personal emails (@gmail, @yahoo, @outlook) are completely acceptable — do NOT flag them
-- If link text like 'Live Demo', 'GitHub', or 'LinkedIn' appears in the text, treat them as working hyperlinks
+- If link text like 'Live Demo', 'GitHub', 'LinkedIn', 'Portfolio', or other professional links appear in the text, treat them as working hyperlinks
 - If the candidate is a student with a future graduation year, that is expected and fine
 - Only provide feedback on genuine, specific problems — no generic praise, no compliments
 - Use single quotes (') inside string values in your JSON output
 
 Evaluate these four categories (each 0-100):
-- impact: Strength of action verbs, use of measurable results/metrics, technical depth of bullet points
+- impact: Strength of action verbs, use of measurable results/metrics, industry depth of bullet points/responsibilities
 - brevity: Clean, concise writing — no filler words or padded descriptions
 - style: ATS-readability, clear section headers, professional formatting
-- sections: Presence and quality of the key resume sections (contact, summary, skills, experience, projects, education)
+- sections: Presence and quality of the key resume sections relevant to "${sector}" (such as contact, summary, skills, experience, projects, education)
 
 Respond with ONLY raw JSON — no markdown, no explanation:
 {
@@ -122,7 +125,7 @@ Respond with ONLY raw JSON — no markdown, no explanation:
     "style": <0-100>,
     "sections": <0-100>
   },
-  "missingKeywords": ["<relevant tech keyword missing from this resume>", ...],
+  "missingKeywords": ["<relevant industry keyword, skill, or methodology missing from this resume for the ${sector} field>", ...],
   "feedback": [
     "<specific actionable problem the candidate should fix>",
     ...
@@ -715,7 +718,8 @@ Provide a JSON response with exactly the following structure (do not include any
 // @access  Private
 exports.chatWithResume = async (req, res, next) => {
   try {
-    const { resumeText, messages } = req.body;
+    const { resumeText, messages, sector } = req.body;
+    const targetSector = sector || 'IT & Software Engineering';
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ success: false, message: 'messages array is required' });
@@ -726,8 +730,8 @@ exports.chatWithResume = async (req, res, next) => {
     }
 
     const systemPrompt = resumeText
-      ? `You are an expert resume advisor and ATS (Applicant Tracking System) specialist. The user has uploaded their resume. Here is the full resume text:\n\n--- RESUME ---\n${resumeText.substring(0, 3500)}\n--- END RESUME ---\n\nAnswer the user's questions about their resume honestly and specifically. Give actionable advice. Refer to actual resume content when relevant.`
-      : `You are an expert resume advisor and ATS specialist. The user has not uploaded a resume yet. Answer their general resume questions and encourage them to upload their resume for personalized advice.`;
+      ? `You are an expert resume advisor and ATS (Applicant Tracking System) specialist specializing in the "${targetSector}" industry. The user has uploaded their resume. Here is the full resume text:\n\n--- RESUME ---\n${resumeText.substring(0, 3500)}\n--- END RESUME ---\n\nAnswer the user's questions about their resume honestly, specifically, and tailored to the "${targetSector}" industry standards. Give actionable advice. Refer to actual resume content when relevant.`
+      : `You are an expert resume advisor and ATS specialist specializing in the "${targetSector}" industry. The user has not uploaded a resume yet. Answer their general resume questions and encourage them to upload their resume for personalized advice.`;
 
     const invokeUrl = 'https://integrate.api.nvidia.com/v1/chat/completions';
     const headers = {

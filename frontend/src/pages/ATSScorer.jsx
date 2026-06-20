@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { atsService } from '../services/api';
-import { UploadCloud, CheckCircle, AlertTriangle, FileText, BarChart, ChevronRight, MessageSquare, Send, Bot, User, X } from 'lucide-react';
+import { UploadCloud, CheckCircle, AlertTriangle, FileText, BarChart, ChevronRight, MessageSquare, Send, Bot, User, X, Briefcase } from 'lucide-react';
 
 const ATSScorer = () => {
   const [file, setFile] = useState(null);
@@ -9,6 +9,11 @@ const ATSScorer = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [resumeText, setResumeText] = useState('');
+
+  // Sector selection state
+  const [sector, setSector] = useState('IT & Software Engineering');
+  const [customRole, setCustomRole] = useState('');
+  const [analyzedSector, setAnalyzedSector] = useState('');
 
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
@@ -66,8 +71,12 @@ const ATSScorer = () => {
     setError(null);
     setResult(null);
 
+    const activeSector = sector === 'Other' ? (customRole.trim() || 'Custom Sector') : sector;
+    setAnalyzedSector(activeSector);
+
     const formData = new FormData();
     formData.append('resume', file);
+    formData.append('sector', activeSector);
 
     try {
       const response = await atsService.scoreResume(formData);
@@ -79,7 +88,7 @@ const ATSScorer = () => {
         // Open chat with a greeting
         setMessages([{
           role: 'assistant',
-          content: `I've analyzed your resume and given it a score of **${response.data.data.score}/100**. Feel free to ask me anything — like "How can I improve my score?", "Is this resume good for a finance role?", or "What keywords am I missing?"`
+          content: `I've analyzed your resume for the **${activeSector}** industry and given it a score of **${response.data.data.score}/100**. Feel free to ask me anything — like "How can I improve my score for this industry?", or "What keywords am I missing?"`
         }]);
       } else {
         setError(response.data.message || 'Failed to analyze resume');
@@ -101,7 +110,7 @@ const ATSScorer = () => {
     setChatLoading(true);
 
     try {
-      const response = await atsService.chatResume(resumeText, newMessages);
+      const response = await atsService.chatResume(resumeText, newMessages, analyzedSector);
 
       if (response.data.success) {
         setMessages(prev => [...prev, { role: 'assistant', content: response.data.data.reply }]);
@@ -155,7 +164,60 @@ const ATSScorer = () => {
         <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-8 lg:p-12">
 
           {!result && !loading && (
-            <div className="flex flex-col items-center justify-center space-y-8">
+            <div className="flex flex-col items-center justify-center space-y-8 w-full">
+              {/* Sector Selection Card */}
+              <div className="w-full max-w-2xl bg-slate-800/40 border border-slate-700/50 rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl text-left">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Target Sector / Role</h3>
+                    <p className="text-xs text-slate-500">Specify your industry so the AI scores your resume against correct industry standards</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">Select Industry</label>
+                    <select
+                      value={sector}
+                      onChange={(e) => {
+                        setSector(e.target.value);
+                        if (e.target.value !== 'Other') {
+                          setCustomRole('');
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-slate-200 focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 focus:outline-none transition-all cursor-pointer hover:border-slate-600"
+                    >
+                      <option value="IT & Software Engineering">IT & Software Engineering</option>
+                      <option value="Finance & Banking">Finance & Banking</option>
+                      <option value="Healthcare & Medicine">Healthcare & Medicine</option>
+                      <option value="Marketing, Sales & Product">Marketing, Sales & Product</option>
+                      <option value="Human Resources & Recruitment">Human Resources & Recruitment</option>
+                      <option value="Education & Teaching">Education & Teaching</option>
+                      <option value="Creative, Design & Writing">Creative, Design & Writing</option>
+                      <option value="Engineering & Manufacturing">Engineering & Manufacturing</option>
+                      <option value="Other">Other / Custom Sector</option>
+                    </select>
+                  </div>
+
+                  {sector === 'Other' && (
+                    <div className="flex flex-col animate-in fade-in slide-in-from-top-2 duration-300">
+                      <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">Custom Sector or Role</label>
+                      <input
+                        type="text"
+                        value={customRole}
+                        onChange={(e) => setCustomRole(e.target.value)}
+                        placeholder="e.g. Graphic Designer, Data Analyst"
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-slate-200 focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 focus:outline-none transition-all placeholder-slate-500 hover:border-slate-600"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* File Dropzone */}
               <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -244,7 +306,7 @@ const ATSScorer = () => {
                     {result.score >= 80 ? 'Exceptional Match!' : result.score >= 60 ? 'Good, but needs work.' : 'Needs Significant Revision.'}
                   </h2>
                   <p className="text-slate-400 leading-relaxed">
-                    Based on corporate Applicant Tracking Systems, your resume scored {result.score} out of 100. Review the detailed breakdown below to optimize your profile for recruiters.
+                    Based on corporate Applicant Tracking Systems for the <span className="text-blue-400 font-extrabold">{analyzedSector}</span> industry, your resume scored {result.score} out of 100. Review the detailed breakdown below to optimize your profile for recruiters.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-3">
                     <button
@@ -377,11 +439,11 @@ const ATSScorer = () => {
               {/* Suggested questions (shown before first user message) */}
               {messages.filter(m => m.role === 'user').length === 0 && (
                 <div className="px-4 pb-3 flex flex-wrap gap-2">
-                  {['How can I improve my score?', 'Is this good for a finance role?', 'What keywords am I missing?'].map((q) => (
+                  {[`How can I improve my score for ${analyzedSector}?`, `What keywords are critical for ${analyzedSector}?`, 'What key sections am I missing?'].map((q) => (
                     <button
                       key={q}
                       onClick={() => { setChatInput(q); setTimeout(() => inputRef.current?.focus(), 50); }}
-                      className="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 hover:border-violet-500 hover:text-violet-300 transition-colors"
+                      className="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 hover:border-violet-500 hover:text-violet-300 transition-colors text-left"
                     >
                       {q}
                     </button>
