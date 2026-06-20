@@ -7,13 +7,13 @@ import {
   User, BookOpen, Briefcase, Code, Plus, Trash, Save,
   ArrowRight, ArrowLeft, FileText, Sparkles, CheckCircle,
   AlertTriangle, GripVertical, ArrowUp, ArrowDown, Lock,
-  ChevronRight, Award, Globe, Layers, RefreshCw
+  ChevronRight, Award, Globe, Layers, RefreshCw, Pencil, Eye
 } from 'lucide-react';
 import { getTemplateComponent } from '../templates/ResumeTemplates';
 
 /* ─── Shared input class helper ─── */
-const inputCls = "mt-1 block w-full px-3.5 py-2.5 bg-slate-900/60 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:outline-none transition-all duration-200";
-const labelCls = "block text-xs font-bold uppercase text-slate-400 tracking-wider mb-1";
+const inputCls = "mt-1.5 block w-full px-4 py-3 bg-slate-900/80 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/70 focus:outline-none transition-all duration-300 hover:border-slate-600";
+const labelCls = "block text-[11px] font-bold uppercase text-slate-400 tracking-wider mb-1.5 flex items-center gap-1";
 
 /* ─── Animated section wrapper ─── */
 const StepPanel = ({ children, direction }) => {
@@ -535,74 +535,88 @@ const ResumeBuilder = () => {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* ── Top header bar ── */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div className="flex items-center gap-4">
-            <div>
+        <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 sm:p-5 mb-6">
+          {/* Row 1: Title + Save */}
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex-grow min-w-0">
               <input
                 {...register('title')}
-                className="text-xl font-black text-white bg-transparent border-b border-transparent hover:border-slate-600 focus:border-blue-500 focus:outline-none px-1 py-0.5 transition-colors"
+                className="text-lg sm:text-xl font-black text-white bg-transparent border-b-2 border-transparent hover:border-slate-600 focus:border-blue-500 focus:outline-none px-1 py-0.5 transition-colors w-full truncate"
               />
-              <p className="text-slate-500 text-xs mt-0.5 pl-1">Click to rename your resume</p>
+              <p className="text-slate-500 text-[10px] mt-1 pl-1 font-medium">Tap to rename</p>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Locked template badge */}
-            <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2">
-              <Lock className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
-              <span className="text-xs font-bold text-slate-300">
-                {TEMPLATE_NAMES[lockedTemplate] || lockedTemplate}
-              </span>
-              <span className="text-[9px] text-blue-400 bg-blue-950/60 border border-blue-800/40 px-1.5 py-0.5 rounded-lg font-bold uppercase">Locked</span>
-            </div>
-
-            {/* Font family */}
-            <select {...register('fontFamily')} className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
-              <option value="sans">System Sans</option>
-              <option value="serif">System Serif</option>
-              <option value="times">Times New Roman</option>
-              <option value="arial">Arial</option>
-              <option value="georgia">Georgia</option>
-              <option value="calibri">Calibri</option>
-              <option value="helvetica">Helvetica</option>
-            </select>
-
-            {/* Font size */}
-            <select {...register('fontSize')} className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
-              {['9','10','11','12','13','14'].map(s => (
-                <option key={s} value={s}>{s}pt{s === '11' ? ' (Default)' : ''}</option>
-              ))}
-            </select>
-
-            {/* Theme color */}
-            <select {...register('themeColor')} className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
-              <option value="#1e293b">Slate Blue</option>
-              <option value="#1d4ed8">Royal Blue</option>
-              <option value="#0f766e">Deep Teal</option>
-              <option value="#111827">Midnight Black</option>
-              <option value="#701a75">Deep Purple</option>
-            </select>
-
-            {/* Save button */}
             <button
               onClick={handleSubmit(onSubmit)}
               disabled={saveLoading}
-              className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
+              className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all disabled:opacity-50 shrink-0"
             >
               <Save className="h-4 w-4" />
-              {saveLoading ? 'Saving...' : 'Save & Preview'}
+              <span className="hidden sm:inline">{saveLoading ? 'Saving...' : 'Save & Preview'}</span>
+              <span className="sm:hidden">{saveLoading ? '...' : 'Save'}</span>
             </button>
+          </div>
+
+          {/* Row 2: Settings chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Locked template badge */}
+            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-1.5">
+              <Lock className="h-3 w-3 text-blue-400 flex-shrink-0" />
+              <span className="text-[10px] font-bold text-slate-300 hidden sm:inline">
+                {TEMPLATE_NAMES[lockedTemplate] || lockedTemplate}
+              </span>
+              <span className="text-[10px] font-bold text-slate-300 sm:hidden">Template</span>
+              <span className="text-[8px] text-blue-400 bg-blue-950/80 border border-blue-800/50 px-1.5 py-0.5 rounded font-bold uppercase">Locked</span>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden sm:block w-px h-5 bg-slate-700/60" />
+
+            {/* Font family */}
+            <div className="flex items-center gap-1.5 bg-slate-800/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5">
+              <span className="text-[9px] font-bold text-slate-500 uppercase hidden sm:inline">Font</span>
+              <select {...register('fontFamily')} className="bg-transparent border-none text-[11px] font-semibold text-slate-300 focus:outline-none cursor-pointer pr-4">
+                <option value="sans">Sans</option>
+                <option value="serif">Serif</option>
+                <option value="times">Times</option>
+                <option value="arial">Arial</option>
+                <option value="georgia">Georgia</option>
+                <option value="calibri">Calibri</option>
+                <option value="helvetica">Helvetica</option>
+              </select>
+            </div>
+
+            {/* Font size */}
+            <div className="flex items-center gap-1.5 bg-slate-800/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5">
+              <span className="text-[9px] font-bold text-slate-500 uppercase hidden sm:inline">Size</span>
+              <select {...register('fontSize')} className="bg-transparent border-none text-[11px] font-semibold text-slate-300 focus:outline-none cursor-pointer pr-4">
+                {['9','10','11','12','13','14'].map(s => (
+                  <option key={s} value={s}>{s}pt{s === '11' ? ' ✓' : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Theme color */}
+            <div className="flex items-center gap-1.5 bg-slate-800/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5">
+              <span className="text-[9px] font-bold text-slate-500 uppercase hidden sm:inline">Color</span>
+              <select {...register('themeColor')} className="bg-transparent border-none text-[11px] font-semibold text-slate-300 focus:outline-none cursor-pointer pr-4">
+                <option value="#1e293b">Slate</option>
+                <option value="#1d4ed8">Royal Blue</option>
+                <option value="#0f766e">Teal</option>
+                <option value="#111827">Midnight</option>
+                <option value="#701a75">Purple</option>
+              </select>
+            </div>
           </div>
         </div>
 
         {/* ── Progress Stepper ── */}
-        <div className="mb-8 no-print">
+        <div className="mb-6 no-print">
           {/* Progress bar */}
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-slate-400">Step {activeStep + 1} of {STEPS.length}</span>
-            <span className="text-xs font-bold text-blue-400">{progressPct}% Complete</span>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-bold text-slate-400">Step {activeStep + 1} of {STEPS.length}</span>
+            <span className="text-[11px] font-bold text-blue-400">{progressPct}%</span>
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-1.5 mb-6">
+          <div className="w-full bg-slate-800/80 rounded-full h-1.5 mb-5">
             <div
               className="h-1.5 bg-gradient-to-r from-blue-500 to-violet-500 rounded-full transition-all duration-500 ease-out"
               style={{ width: `${progressPct}%` }}
@@ -610,7 +624,7 @@ const ResumeBuilder = () => {
           </div>
 
           {/* Step pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
+          <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-2 scroll-x-mobile">
             {STEPS.map((step, idx) => {
               const Icon = step.icon;
               const isActive = idx === activeStep;
@@ -619,12 +633,12 @@ const ResumeBuilder = () => {
                 <button
                   key={step.id}
                   onClick={() => goToStep(idx)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${
                     isActive
-                      ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-lg shadow-blue-500/25'
+                      ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-lg shadow-blue-500/25 ring-1 ring-blue-400/30'
                       : isDone
-                        ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-950'
-                        : 'bg-slate-900/60 text-slate-500 border border-slate-800 hover:text-slate-300 hover:border-slate-700'
+                        ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/40'
+                        : 'bg-slate-900/60 text-slate-500 border border-slate-800 hover:text-slate-300 hover:border-slate-600'
                   }`}
                 >
                   {isDone ? (
@@ -639,30 +653,31 @@ const ResumeBuilder = () => {
             })}
           </div>
         </div>
+
         {/* Mobile Tab Toggle */}
-        <div className="xl:hidden flex justify-center mb-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-1 flex items-center">
+        <div className="xl:hidden flex justify-center mb-5">
+          <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-xl p-1 flex items-center w-full max-w-xs">
             <button
               type="button"
               onClick={() => setEditorTab('edit')}
-              className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                 editorTab === 'edit'
-                  ? 'bg-blue-600 text-white shadow-md'
+                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Form Editor
+              <Pencil className="h-3.5 w-3.5" /> Editor
             </button>
             <button
               type="button"
               onClick={() => setEditorTab('preview')}
-              className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                 editorTab === 'preview'
-                  ? 'bg-blue-600 text-white shadow-md'
+                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Live Preview
+              <Eye className="h-3.5 w-3.5" /> Preview
             </button>
           </div>
         </div>
@@ -674,69 +689,71 @@ const ResumeBuilder = () => {
           <div className={`xl:col-span-7 ${editorTab === 'edit' ? 'block' : 'hidden xl:block'}`}>
 
             {/* ATS Score card (above form) */}
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 mb-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-5 no-print">
-              <div className="flex-grow">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    {aiScoringLoading ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 text-blue-400 animate-spin" />
-                        AI Auditing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-3.5 w-3.5 text-violet-400 animate-pulse" />
-                        AI ATS Score
-                      </>
-                    )}
-                  </span>
-                  <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg ${
-                    atsScore >= 80 ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800' :
-                    atsScore >= 60 ? 'bg-amber-950/60 text-amber-400 border border-amber-800' :
-                    'bg-rose-950/60 text-rose-400 border border-rose-800'
-                  }`}>{atsScore}/100</span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-500 ${
-                      atsScore >= 80 ? 'bg-emerald-500' : atsScore >= 60 ? 'bg-amber-500' : 'bg-rose-500'
-                    }`}
-                    style={{ width: `${atsScore}%` }}
-                  />
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3 justify-between sm:justify-end shrink-0">
-                {aiScoringLoading ? (
-                  <span className="text-xs text-slate-500 font-medium">Scanning text...</span>
-                ) : getSuggestionsCount() === 0 ? (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 whitespace-nowrap">
-                    <CheckCircle className="h-4 w-4" /> Fully Optimized!
+            <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-4 sm:p-5 mb-5 no-print">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                <div className="flex-grow">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                      {aiScoringLoading ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 text-blue-400 animate-spin" />
+                          Auditing...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                          AI ATS Score
+                        </>
+                      )}
+                    </span>
+                    <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg ${
+                      atsScore >= 80 ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60' :
+                      atsScore >= 60 ? 'bg-amber-950/60 text-amber-400 border border-amber-800/60' :
+                      'bg-rose-950/60 text-rose-400 border border-rose-800/60'
+                    }`}>{atsScore}/100</span>
                   </div>
-                ) : (
-                  <div className="text-xs text-amber-400 flex items-center gap-1.5 whitespace-nowrap">
-                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                    {getSuggestionsCount()} suggestion{getSuggestionsCount() > 1 ? 's' : ''}
+                  <div className="w-full bg-slate-800/80 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-700 ease-out ${
+                        atsScore >= 80 ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : atsScore >= 60 ? 'bg-gradient-to-r from-amber-500 to-amber-400' : 'bg-gradient-to-r from-rose-500 to-rose-400'
+                      }`}
+                      style={{ width: `${atsScore}%` }}
+                    />
                   </div>
-                )}
+                </div>
                 
-                <button
-                  type="button"
-                  onClick={handleManualAudit}
-                  disabled={aiScoringLoading}
-                  className="bg-slate-800 border border-slate-700 hover:border-slate-600 hover:bg-slate-750 text-slate-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-3 w-3 ${aiScoringLoading ? 'animate-spin' : ''}`} />
-                  Recalculate
-                </button>
+                <div className="flex items-center gap-3 justify-between sm:justify-end shrink-0">
+                  {aiScoringLoading ? (
+                    <span className="text-[10px] text-slate-500 font-medium">Scanning...</span>
+                  ) : getSuggestionsCount() === 0 ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 whitespace-nowrap font-bold">
+                      <CheckCircle className="h-3.5 w-3.5" /> Optimized
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-amber-400 flex items-center gap-1.5 whitespace-nowrap font-semibold">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                      {getSuggestionsCount()} tip{getSuggestionsCount() > 1 ? 's' : ''}
+                    </div>
+                  )}
+                  
+                  <button
+                    type="button"
+                    onClick={handleManualAudit}
+                    disabled={aiScoringLoading}
+                    className="bg-slate-800/80 border border-slate-700/80 hover:border-slate-600 text-slate-300 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 hover:bg-slate-750"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${aiScoringLoading ? 'animate-spin' : ''}`} />
+                    Rescan
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* ── ATS suggestions list (Section-Wise) ── */}
             {getActiveSuggestions().length > 0 && (
               <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 mb-5 space-y-3 no-print">
-                <span className="block text-xs font-bold text-amber-400 uppercase tracking-wider">
-                  ⚠️ Optimization Feedback for {currentStep.label}
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5" /> Optimization Feedback for {currentStep.label}
                 </span>
                 <div className="space-y-2">
                   {getActiveSuggestions().map((sug, i) => (
@@ -767,13 +784,15 @@ const ResumeBuilder = () => {
             )}
 
             {/* ── Step Form Card ── */}
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8">
-              <div className="flex items-center gap-3 border-b border-slate-800 pb-5 mb-6">
-                {React.createElement(currentStep.icon, { className: "h-5 w-5 text-blue-400" })}
-                <h2 className="text-lg font-black text-white">{currentStep.label}</h2>
-                <span className="ml-auto text-xs text-slate-500 bg-slate-800 px-2.5 py-1 rounded-lg font-medium">
-                  {activeStep + 1} / {STEPS.length}
-                </span>
+            <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 sm:p-7">
+              <div className="flex items-center gap-3 border-b border-slate-800/80 pb-4 mb-6">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600/20 to-violet-600/20 border border-blue-800/30 flex items-center justify-center">
+                  {React.createElement(currentStep.icon, { className: "h-4.5 w-4.5 text-blue-400" })}
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-white leading-tight">{currentStep.label}</h2>
+                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">Step {activeStep + 1} of {STEPS.length}</p>
+                </div>
               </div>
 
               <StepPanel key={activeStep} direction={navDirection}>
@@ -991,28 +1010,41 @@ const ResumeBuilder = () => {
                 {/* ═══════ EDUCATION ═══════ */}
                 {currentStep.id === 'education' && (
                   <div className="space-y-5">
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-slate-500">Add your academic qualifications</p>
                       <button
                         type="button"
                         onClick={() => appendEdu({ degree:'', college:'', university:'', startDate:'', endDate:'', expectedGraduation:'', score:'', isPursuing: false })}
-                        className="text-xs font-bold bg-blue-950/60 hover:bg-blue-950 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition"
+                        className="text-xs font-bold bg-blue-950/60 hover:bg-blue-900/40 border border-blue-800/60 text-blue-300 px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all hover:-translate-y-0.5"
                       >
                         <Plus className="h-4 w-4" /> Add Education
                       </button>
                     </div>
 
                     {eduFields.length === 0 && (
-                      <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-700 rounded-xl">
-                        Click "Add Education" to add your academic records
+                      <div className="text-center py-12 text-slate-500 text-sm border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+                        <BookOpen className="h-8 w-8 mx-auto mb-3 text-slate-700" />
+                        <p className="font-semibold text-slate-400">No education added yet</p>
+                        <p className="text-xs text-slate-600 mt-1">Click "Add Education" to begin</p>
                       </div>
                     )}
 
                     {eduFields.map((field, idx) => (
-                      <div key={field.id} className="bg-slate-950/60 border border-slate-700/60 rounded-xl p-5 relative space-y-4">
-                        <button type="button" onClick={() => removeEdu(idx)} className="absolute top-4 right-4 text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 p-1.5 rounded-lg transition">
-                          <Trash className="h-4 w-4" />
-                        </button>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      <div key={field.id} className="bg-slate-950/50 border border-slate-800/80 rounded-xl overflow-hidden">
+                        {/* Card header */}
+                        <div className="flex items-center justify-between px-5 py-3 bg-slate-900/50 border-b border-slate-800/60">
+                          <div className="flex items-center gap-2">
+                            <BookOpen className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="text-xs font-bold text-slate-300">Education #{idx + 1}</span>
+                          </div>
+                          <button type="button" onClick={() => removeEdu(idx)} className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 p-1.5 rounded-lg transition-all text-[10px] font-bold flex items-center gap-1">
+                            <Trash className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Remove</span>
+                          </button>
+                        </div>
+                        {/* Card body */}
+                        <div className="p-5 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {[
                             { label:'Degree / Qualification', field:`education.${idx}.degree`, placeholder:'B.Tech Computer Science', req:true },
                             { label:'College / Institute', field:`education.${idx}.college`, placeholder:'ABC Institute of Technology', req:true },
@@ -1050,6 +1082,7 @@ const ResumeBuilder = () => {
                               <input {...register(`education.${idx}.endDate`)} className={inputCls} placeholder="June 2026" />
                             </div>
                           )}
+                          </div>
                         </div>
                       </div>
                     ))}
