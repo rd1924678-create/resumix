@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const sendEmail = require('../utils/sendEmail');
+const crypto = require('crypto');
 
 // Helper to generate JWT token
 const generateToken = (id) => {
@@ -51,7 +52,7 @@ const registerUser = async (req, res, next) => {
     if (userExists) {
       // If user exists and is not verified, regenerate OTP
       if (!userExists.isVerified) {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = crypto.randomInt(100000, 1000000).toString();
         userExists.otp = otp;
         userExists.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
         await userExists.save();
@@ -68,7 +69,7 @@ const registerUser = async (req, res, next) => {
       throw new Error('User already exists');
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1000000).toString();
 
     const user = await User.create({
       name,
@@ -138,7 +139,7 @@ const loginUser = async (req, res, next) => {
       throw new Error('User not found. Please register first.');
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1000000).toString();
     user.otp = otp;
     user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
     await user.save();

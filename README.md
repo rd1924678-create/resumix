@@ -2,6 +2,8 @@
 
 Welcome to **Resumix**, an open-source, developer-focused, single-column ATS (Applicant Tracking System) Resume Builder. Resumix is designed to help software engineers, developers, and tech professionals generate clean, structured, and high-scoring resumes that easily pass automated recruiter filters while offering a visually stunning SaaS experience.
 
+**Live Link:** [resumixats.netlify.app](https://resumixats.netlify.app)
+
 ![Resumix Banner](./frontend/src/assets/banner.png)
 
 ---

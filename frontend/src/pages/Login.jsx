@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/api';
-import { FileText, AlertCircle, ArrowLeft, Check, Star, Shield, KeyRound, Sparkles } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, Star, Shield, KeyRound, Sparkles } from 'lucide-react';
+import logo from '../assets/resumixlogo-removebg-preview.png';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -110,12 +111,10 @@ const Login = () => {
         <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-600/5 rounded-full blur-3xl pointer-events-none" />
         
         <div className="mx-auto w-full max-w-md z-10">
-          <div className="mb-8">
-            <Link to="/" className="inline-flex items-center space-x-2">
-              <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-500/20">
-                <FileText className="h-5 w-5 text-white" />
-              </div>
-              <span className="font-extrabold text-xl text-white tracking-tight">Resumix</span>
+          <div className="mb-8 mt-12 md:mt-0">
+            <Link to="/" className="inline-flex items-center">
+              <img src={logo} alt="Resumix Logo" className="h-8 w-auto object-contain -mr-1" />
+              <span className="font-extrabold text-xl text-white tracking-tight mt-0.5">esumix</span>
             </Link>
             <h2 className="mt-6 text-3xl font-extrabold text-white tracking-tight">Welcome Back</h2>
             <p className="mt-2 text-sm text-slate-400">
